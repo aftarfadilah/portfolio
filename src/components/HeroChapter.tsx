@@ -106,7 +106,7 @@ export default function HeroChapter() {
           className="mx-auto mt-4 max-w-lg text-lg text-muted-foreground"
           {...fadeIn(1.5)}
         >
-          Previously core team at NoscAI GmbH. Now building at Shiro Labs.
+          QA Engineer at NoscAI. Founder of Shiro Labs.
         </motion.p>
 
         {/* Social icons row */}

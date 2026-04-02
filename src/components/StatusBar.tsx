@@ -1,6 +1,23 @@
 "use client";
 
+import { useState } from "react";
 import { ideSections } from "@/data/content";
+
+const BRANCHES = [
+  "main",
+  "feat/hire-aftar",
+  "fix/sleep-schedule",
+  "feat/add-coffee-api",
+  "hotfix/monday-motivation",
+  "refactor/life-choices",
+  "feat/dark-mode-irl",
+  "chore/touch-grass",
+  "fix/imposter-syndrome",
+  "feat/unlimited-energy",
+  "release/v2-better-human",
+  "wip/still-debugging",
+  "feat/ctrl-z-real-life",
+];
 
 interface StatusBarProps {
   activeSection: string;
@@ -21,21 +38,26 @@ function getFileType(icon: "tsx" | "json" | "md"): string {
 }
 
 export default function StatusBar({ activeSection }: StatusBarProps) {
+  const [branchIndex, setBranchIndex] = useState(0);
   const current = ideSections.find((s) => s.id === activeSection);
   const fileType = current ? getFileType(current.icon) : "TypeScript React";
 
   return (
     <div className="h-6 flex items-center justify-between px-3 bg-ide-statusbar text-white/90 text-[11px] font-mono shrink-0">
       <div className="flex items-center gap-3">
-        <span className="flex items-center gap-1">
+        <button
+          onClick={() => setBranchIndex((i) => (i + 1) % BRANCHES.length)}
+          className="flex items-center gap-1 hover:bg-white/10 rounded px-1.5 -mx-1.5 py-0.5 -my-0.5 transition-colors"
+          title="Click me"
+        >
           <GitBranchIcon />
-          main
-        </span>
+          {BRANCHES[branchIndex]}
+        </button>
       </div>
       <div className="flex items-center gap-3">
-        <span>{fileType}</span>
-        <span>UTF-8</span>
-        <span>Prettier</span>
+        <span className="hover:bg-white/10 rounded px-1.5 py-0.5 transition-colors cursor-default">{fileType}</span>
+        <span className="hover:bg-white/10 rounded px-1.5 py-0.5 transition-colors cursor-default">UTF-8</span>
+        <span className="hover:bg-white/10 rounded px-1.5 py-0.5 transition-colors cursor-default">Prettier</span>
       </div>
     </div>
   );

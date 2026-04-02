@@ -32,36 +32,71 @@ export interface Experience {
 
 export const experiences: Experience[] = [
   {
-    company: "NoscAI GmbH",
-    role: "Frontend Engineer → QA Engineer",
-    period: "2022 — 2024",
-    location: "Hamburg, Germany",
-    description: "One of the first 4 team members. Started part-time building the ClinicOS frontend for 2 years, then moved to full-time QA and set up most of the test automation infrastructure.",
+    company: "NoscAI",
+    role: "QA Engineer",
+    period: "Dec 2025 — Present",
+    location: "Hamburg, Germany · Remote",
+    description: "Full-time QA engineer responsible for end-to-end testing and test automation for ClinicOS — Germany's first AI-integrated physician information system.",
     highlights: [
-      "Built the frontend for ClinicOS — Germany's first AI-integrated physician information system",
-      "Set up 90% of the test automation infrastructure",
+      "End-to-end testing and test automation infrastructure",
       "AI-powered medical transcription, patient management, GOÄ billing",
-      "GDPR-compliant cloud platform for healthcare",
+      "GDPR-compliant healthcare cloud platform",
     ],
-    tags: ["React", "TypeScript", "Playwright", "Cypress", "CI/CD", "Healthcare AI"],
-    awards: [
-      "AI.SUMMIT 2024 — Jury + Audience Award",
-      "1st Place — AI Startup Hub Hamburg Accelerator",
-    ],
-    image: "/clinicos-dashboard.webp",
+    tags: ["E2E Testing", "Test Automation", "Playwright", "Cypress", "CI/CD"],
   },
   {
     company: "Shiro Labs",
     role: "Founder",
-    period: "2024 — Present",
-    location: "Indonesia",
-    description: "Building AI-powered B2B tools. Applying what I learned in healthcare software to new problem spaces.",
+    period: "Sep 2025 — Present",
+    location: "Remote",
+    description: "Designing and developing an AI platform that helps HR teams and companies screen candidates quickly and accurately — focused on efficient, human-centered technology.",
     highlights: [
       "Building Cariin — B2B hiring platform with AI skill matching from CVs",
-      "Full-stack development with Next.js, TypeScript, Prisma, PostgreSQL",
-      "Integrating Claude API for intelligent document processing",
+      "Full-stack development with Laravel, TypeScript, PostgreSQL",
+      "AI-powered candidate screening and matching",
     ],
-    tags: ["Next.js", "TypeScript", "Prisma", "PostgreSQL", "Claude API"],
+    tags: ["Laravel", "TypeScript", "PostgreSQL", "AI", "B2B SaaS"],
+  },
+  {
+    company: "Yayasan Pendidikan Bina Anak Indonesia Kompeten",
+    role: "Laravel Developer (Intern)",
+    period: "Feb 2025 — Aug 2025",
+    location: "Surabaya, Indonesia · On-site",
+    description: "Developed a digital platform supporting the education sector — helping Indonesian students access consultation services and overseas study registration.",
+    highlights: [
+      "Built education platform for overseas study consultation",
+      "Full-stack development with Laravel",
+    ],
+    tags: ["Laravel", "Web Development", "PHP", "MySQL"],
+  },
+  {
+    company: "NoscAI",
+    role: "Frontend Developer",
+    period: "Nov 2022 — Aug 2024",
+    location: "Germany · Remote",
+    description: "Part-time frontend developer building the UI for an AI-powered healthcare SaaS dashboard, focused on intuitive UX for medical professionals and facility management.",
+    highlights: [
+      "Built frontend for ClinicOS healthcare SaaS dashboard",
+      "Focused on intuitive UX for medical staff",
+      "One of the first 4 team members",
+    ],
+    tags: ["Next.js", "React", "TypeScript", "Tailwind CSS", "Healthcare AI"],
+    awards: [
+      "AI.SUMMIT 2024 — Jury + Audience Award",
+      "1st Place — AI Startup Hub Hamburg Accelerator",
+    ],
+  },
+  {
+    company: "Alamaya Online Indonesia",
+    role: "Website Developer (Intern)",
+    period: "Jul 2018 — Jun 2019",
+    location: "Denpasar, Bali, Indonesia · On-site",
+    description: "Implemented client designs into responsive, functional websites that met project standards.",
+    highlights: [
+      "Converted client designs to responsive websites",
+      "WordPress development and customization",
+    ],
+    tags: ["WordPress", "Web Development", "HTML/CSS", "JavaScript"],
   },
 ];
 
@@ -122,15 +157,15 @@ export const projects: Project[] = [
 export const chatResponses: Record<string, string> = {
   hi: "Hey! I'm Aftar's AI assistant. Ask me about his experience, skills, or projects.",
   hello: "Hey! I'm Aftar's AI assistant. Ask me about his experience, skills, or projects.",
-  experience: "Aftar was one of the first 4 team members at NoscAI GmbH in Hamburg, where he built the ClinicOS frontend and later set up 90% of the test automation. He's now running Shiro Labs, building AI-powered B2B tools.",
-  clinicos: "ClinicOS is Germany's first AI-integrated physician information system. Aftar helped build the frontend and test automation. It won the AI.SUMMIT 2024 jury + audience award and placed #1 at AI Startup Hub Hamburg.",
+  experience: "Aftar started as a frontend developer at NoscAI (Nov 2022), building the ClinicOS UI part-time for almost 2 years. After a career break to finish his degree, he returned full-time as QA engineer (Dec 2025). He also interned as a Laravel developer and founded Shiro Labs.",
+  clinicos: "ClinicOS is Germany's first AI-integrated physician information system. Aftar built the frontend (2022-2024) and now handles QA and test automation. It won the AI.SUMMIT 2024 jury + audience award and placed #1 at AI Startup Hub Hamburg.",
   skills: "Aftar works across the stack: React/Next.js/Vue.js on frontend, Node.js/Laravel on backend, Playwright/Cypress for testing, and Claude API/LangChain for AI integration.",
   stack: "Frontend: React, Next.js, Vue.js, TypeScript, Tailwind CSS. Backend: Node.js, Laravel, PostgreSQL, Prisma. Testing: Playwright, Cypress, Jest. AI: Claude API, LangChain, NLP.",
   projects: "Currently building Cariin — a B2B hiring platform with AI skill matching. Also built this IDE-themed portfolio you're looking at right now.",
   cariin: "Cariin is a B2B hiring management platform. Upload CVs and let AI match candidates to roles based on skills, experience, and fit. Built with Next.js, Prisma, PostgreSQL, and Claude API. Coming soon.",
-  shiro: "Shiro Labs is Aftar's company focused on building AI-powered B2B products. Currently working on Cariin.",
-  contact: "You can reach Aftar at aftarfadilah@gmail.com, on GitHub (github.com/aftarfadilah), or LinkedIn (linkedin.com/in/aftarfadilah).",
-  hire: "Aftar is open to interesting opportunities and collaborations. Reach out at aftarfadilah@gmail.com or connect on LinkedIn.",
+  shiro: "Shiro Labs is Aftar's company (founded Sep 2025) focused on AI-powered HR tools. Currently building Cariin — a B2B hiring platform with AI skill matching.",
+  contact: "You can reach Aftar at me@aftarfadilah.com, on GitHub (github.com/aftarfadilah), or LinkedIn (linkedin.com/in/aftarfadilah).",
+  hire: "Aftar is open to interesting opportunities and collaborations. Reach out at me@aftarfadilah.com or connect on LinkedIn.",
   location: "Aftar is based in Indonesia. Previously worked in Hamburg, Germany at NoscAI GmbH.",
 };
 
@@ -155,7 +190,7 @@ export const socialLinks = [
   },
   {
     label: "Email",
-    href: "mailto:aftarfadilah@gmail.com",
+    href: "mailto:me@aftarfadilah.com",
     icon: "email" as const,
   },
 ];
