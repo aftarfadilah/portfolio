@@ -10,7 +10,7 @@ interface Message {
 
 const INITIAL_MESSAGE: Message = {
   role: "assistant",
-  text: "Hey! I'm Aftar's AI assistant. Ask me anything about his experience, skills, or projects.",
+  text: "Hey! I'm not Aftar, but I've read everything he's done. Ask me about his work, stack, or projects — I'll do my best.",
 };
 
 const FALLBACK_RESPONSE =
@@ -95,13 +95,14 @@ export default function ChatChapter() {
           {"// 04"}
         </p>
         <h2 className="mb-4 text-5xl font-bold tracking-tight md:text-6xl">
-          Talk to Aftar
+          Talk to &quot;Aftar&quot;
         </h2>
-        <p className="mb-8 text-muted-foreground">
-          Ask me anything about my experience, skills, or projects.
+        <p className="mb-4 text-muted-foreground">
+          Ask anything about engineering, testing, AI, or how I built things.
+          You&apos;ll get an instant answer based on my actual work and experience.
         </p>
         <p className="mb-8 font-mono text-xs text-muted-foreground/50">
-          Powered by Claude AI
+          AI-powered answers, trained on my knowledge base. It can be wrong sometimes.
         </p>
 
         <div className="overflow-hidden rounded-2xl border border-border bg-card">
@@ -142,7 +143,7 @@ export default function ChatChapter() {
               value={input}
               onChange={(e) => setInput(e.target.value)}
               onKeyDown={(e) => { if (e.key === "Enter") handleSubmit(); }}
-              placeholder="Ask about experience, skills, projects..."
+              placeholder="What did you build at NoscAI?"
               disabled={loading}
               className="flex-1 rounded-xl border border-border bg-muted px-4 py-2.5 font-mono text-sm text-foreground placeholder-muted-foreground focus:border-primary/50 focus:outline-none disabled:opacity-50"
             />
