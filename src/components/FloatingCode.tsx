@@ -108,7 +108,7 @@ export default function FloatingCode({ scrollRef }: { scrollRef?: React.RefObjec
 
   return (
     <div
-      className="pointer-events-none absolute inset-0 overflow-hidden z-[3]"
+      className="pointer-events-none fixed inset-0 overflow-hidden z-[3]"
       aria-hidden="true"
     >
       {particles.map((p) => (

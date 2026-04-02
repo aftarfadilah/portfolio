@@ -126,6 +126,11 @@ export default function IDEShell({ children }: { children: ReactNode }) {
 
   useEffect(() => {
     const editor = editorRef.current;
+    if (editor) editor.scrollTop = 0;
+  }, []);
+
+  useEffect(() => {
+    const editor = editorRef.current;
     if (!editor) return;
     const onScroll = () => {
       const atTop = editor.scrollTop < 100;
