@@ -7,6 +7,7 @@ import Sidebar from "@/components/Sidebar";
 import TabBar from "@/components/TabBar";
 import StatusBar from "@/components/StatusBar";
 import CodeView from "@/components/CodeView";
+import FloatingCode from "@/components/FloatingCode";
 
 const RICK_ASCII = `⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⢀⠤⠒⠒⠒⠒⠠⢄⡀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀
 ⠀⠀⠀⠀⠀⠀⠀⠀⢀⡴⠞⠀⠀⠀⠀⠀⠀⠀⠘⣆⠀⠀⠀⠀⠀⠀⠀⠀⠀
@@ -262,8 +263,11 @@ export default function IDEShell({ children }: { children: ReactNode }) {
                   </span>
                 </div>
               )}
-              <div ref={editorRef} className="h-full overflow-y-auto">
-                {viewMode === "preview" ? children : <CodeView />}
+              <div ref={editorRef} className="relative h-full overflow-y-auto">
+                {viewMode === "preview" && <FloatingCode scrollRef={editorRef} />}
+                <div className="relative z-[2]">
+                  {viewMode === "preview" ? children : <CodeView />}
+                </div>
               </div>
             </div>
           </div>
