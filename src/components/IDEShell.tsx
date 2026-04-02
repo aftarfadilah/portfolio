@@ -268,11 +268,9 @@ export default function IDEShell({ children }: { children: ReactNode }) {
                   </span>
                 </div>
               )}
-              <div ref={editorRef} className="relative h-full overflow-y-auto">
-                {viewMode === "preview" && <FloatingCode scrollRef={editorRef} />}
-                <div className="relative z-[2]">
-                  {viewMode === "preview" ? children : <CodeView />}
-                </div>
+              {viewMode === "preview" && <FloatingCode scrollRef={editorRef} />}
+              <div ref={editorRef} className="relative z-[2] h-full overflow-y-auto">
+                {viewMode === "preview" ? children : <CodeView />}
               </div>
             </div>
           </div>
