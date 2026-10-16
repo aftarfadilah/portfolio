@@ -2,7 +2,7 @@
 
 import { useMemo, useState, useEffect, useRef } from "react";
 
-const SYMBOLS = [
+export const SYMBOLS = [
   "{ }", "< />", "=>", "const", "import", "//", "&&", "===",
   "async", "return", "( )", "[ ]", "0x1F", "|>", "let", "fn",
   "null", "::", ">>", "!=", "++", "export", "void", "yield",
