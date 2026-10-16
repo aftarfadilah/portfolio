@@ -1,6 +1,7 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useSyncExternalStore } from "react";
+import Link from "next/link";
 import { ideSections } from "@/data/content";
 
 interface SidebarProps {
@@ -16,9 +17,22 @@ function FileIcon({ icon }: { icon: "tsx" | "json" | "md" }) {
   return <span className="w-2 h-2 rounded-full bg-muted-foreground shrink-0" />;
 }
 
+const noopSubscribe = () => () => {};
+
+/** The "installer" that matches the visitor's OS: .dmg on Apple devices, .exe elsewhere. */
+function useInstallerName() {
+  return useSyncExternalStore(
+    noopSubscribe,
+    () => (/Mac|iPhone|iPad|iPod/i.test(navigator.userAgent) ? "turntable.dmg" : "turntable.exe"),
+    () => "turntable.exe",
+  );
+}
+
 export default function Sidebar({ activeSection, onNavigate, isOpen, onClose }: SidebarProps) {
   const [portfolioOpen, setPortfolioOpen] = useState(true);
   const [srcOpen, setSrcOpen] = useState(true);
+  const [appOpen, setAppOpen] = useState(true);
+  const installer = useInstallerName();
 
   const content = (
     <div className="flex flex-col h-full">
@@ -61,6 +75,25 @@ export default function Sidebar({ activeSection, onNavigate, isOpen, onClose }: 
                 </button>
               ))}
             </nav>
+          )}
+
+          <button
+            onClick={() => setAppOpen(!appOpen)}
+            className="text-sm font-mono py-1 px-2 ml-5 mr-2 rounded flex items-center gap-2 text-left text-muted-foreground hover:bg-muted/50 transition-colors"
+          >
+            <span className="text-xs">{appOpen ? "▾" : "▸"}</span>
+            app
+          </button>
+
+          {appOpen && (
+            <Link
+              href="/player"
+              title="Open the turntable"
+              className="text-sm font-mono py-1 px-2 ml-8 mr-2 rounded flex items-center gap-2 text-left text-muted-foreground hover:bg-muted/50 transition-colors"
+            >
+              <span className="w-2 h-2 rounded-full bg-syntax-function shrink-0" />
+              {installer}
+            </Link>
           )}
         </>
       )}
