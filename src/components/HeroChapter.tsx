@@ -18,7 +18,7 @@ export default function HeroChapter() {
   return (
     <section
       id="hero"
-      className="relative flex min-h-[calc(100vh-6rem)] items-center justify-center overflow-hidden bg-background"
+      className="relative flex min-h-[calc(100vh-6rem)] items-center justify-center overflow-x-clip bg-background"
       style={{ scrollMarginTop: "6.5rem" }}
     >
       {/* Fullscreen ASCII field + loading intro */}

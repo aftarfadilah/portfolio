@@ -38,14 +38,17 @@ const WATER_STEP = 1 / 120;
 const WATER_K = 0.28; // wave stiffness (wave speed ~ 400px/s)
 const WATER_DAMP = 0.9962; // per step; ripples fade over ~2s
 
-// Beach: the bottom of the hero is empty sand. Every so often the sea rushes
-// in over it, takes over the bottom of the hero, then drains back out.
-const SHORE = 0.84; // resting waterline as a fraction of the height
-const TIDE_MAX = 0.93; // the sea never reaches the bottom edge: land is always left
-const TIDE_PERIOD = 11; // seconds per wave cycle
-const TIDE_RUSH = 2.6; // sea running up the sand
-const TIDE_HOLD = 0.9; // sea at its highest
-const TIDE_DRAIN = 4.6; // sea draining back
+// Beach: the canvas runs past the fold of the hero (EXTEND x the fold height)
+// so nothing is ever clipped. The waterline swings between REST and CREST
+// (fractions of the fold height): the sea rushes down over the empty sand,
+// then drains back, and the sand dissolves into nothing well before the edge.
+const EXTEND = 1.55; // canvas height as a multiple of the fold
+const REST = 0.82; // waterline at low tide
+const CREST = 1.25; // waterline at high tide
+const TIDE_PERIOD = 12; // seconds per wave cycle
+const TIDE_RUSH = 3.2; // sea running up the sand
+const TIDE_HOLD = 1.1; // sea at its highest
+const TIDE_DRAIN = 5.2; // sea draining back
 export const ASCII_INTRO_DURATION = P2_END;
 
 type Link = { label: string; href: string };
@@ -96,6 +99,8 @@ export default function AsciiIntro({ links }: { links: Link[] }) {
     const hoverColors = palette(HOVER_RGBA);
     let cols = 0;
     let rows = 0;
+    let foldRows = 0; // rows down to the fold of the hero
+    let foldH = 0; // px down to the fold
     let cw = 8;
     let ch = 16;
     let fontSize = 12;
@@ -139,13 +144,13 @@ export default function AsciiIntro({ links }: { links: Link[] }) {
       const nameLines = ["AFTAR", "FADILAH"];
       const longest = Math.max(...nameLines.map((l) => l.length));
       let size = Math.floor((cols * 0.86) / (longest * 0.72));
-      size = Math.min(size, Math.floor((rows * 0.34) / (nameLines.length * 0.5)));
+      size = Math.min(size, Math.floor((foldRows * 0.34) / (nameLines.length * 0.5)));
       const pitch = size * 0.5 * 0.95;
       const nameRows = pitch * nameLines.length;
 
       // Vertical stack: name, tagline, subline, contact row.
       const total = nameRows + 9;
-      const top = Math.max(2, (rows - total) / 2 - 1);
+      const top = Math.max(2, (foldRows - total) / 2 - 1);
       o.font = `800 ${size}px sans-serif`;
       nameLines.forEach((line, i) => {
         o.save();
@@ -220,6 +225,8 @@ export default function AsciiIntro({ links }: { links: Link[] }) {
       ch = Math.round(fontSize * 1.4);
       cols = Math.ceil(w / cw) + 1;
       rows = Math.ceil(h / ch) + 1;
+      foldH = h / EXTEND;
+      foldRows = Math.ceil(foldH / ch) + 1;
       buildLayout();
       water = new Float32Array(cols * rows);
       vel = new Float32Array(cols * rows);
@@ -228,11 +235,11 @@ export default function AsciiIntro({ links }: { links: Link[] }) {
       wx = ix / (ix + iy);
       wy = iy / (ix + iy);
       // Sponge near the beach so ripples die out instead of reflecting.
-      shoreCol = new Float32Array(cols).fill(rows * SHORE);
-      wetCol = new Float32Array(cols).fill(rows * SHORE);
+      shoreCol = new Float32Array(cols).fill(foldRows * REST);
+      wetCol = new Float32Array(cols).fill(foldRows * REST);
       activeCol = new Float32Array(cols);
       beachDamp = new Float32Array(rows);
-      for (let y = 0; y < rows; y++) beachDamp[y] = 1 - 0.05 * smooth(0.74, 0.92, y / rows);
+      for (let y = 0; y < rows; y++) beachDamp[y] = 1 - 0.05 * smooth(foldRows * 1.1, rows, y);
     };
 
     const swell = (x: number, y: number, t: number) =>
@@ -296,14 +303,14 @@ export default function AsciiIntro({ links }: { links: Link[] }) {
     };
 
     const updateTide = (t: number, dt: number) => {
-      const rest = rows * SHORE;
-      const peak = rows * TIDE_MAX;
+      const rest = foldRows * REST;
+      const peak = foldRows * CREST;
       for (let x = 0; x < cols; x++) {
         // The wave arrives a touch earlier in some places so the front is slanted.
         const lag = 0.55 * (0.5 + 0.5 * Math.sin(x * 0.011 + 0.6)) + 0.18 * Math.sin(x * 0.043);
         const { lv, moving } = tideLevel(t - P2_END - lag);
         const jag = (0.5 + 0.9 * moving) * Math.sin(x * 0.07 + t * 1.3) + 0.4 * Math.sin(x * 0.19 - t * 2);
-        const w = Math.min(peak, rest + (peak - rest) * lv + jag * (lv > 0.01 ? 1 : 0.3));
+        const w = rest + (peak - rest) * lv + jag * (lv > 0.01 ? 1 : 0.3);
         shoreCol[x] = w;
         activeCol[x] = moving;
         wetCol[x] = Math.max(w, wetCol[x] - 0.55 * dt);
@@ -349,7 +356,7 @@ export default function AsciiIntro({ links }: { links: Link[] }) {
         if (t > nextDrop) {
           splash(
             Math.random() * w,
-            Math.random() * h,
+            Math.random() * foldH,
             0.6 + Math.random() * 0.5,
             26 + Math.random() * 14,
           );
@@ -385,7 +392,8 @@ export default function AsciiIntro({ links }: { links: Link[] }) {
               // Sand: empty, apart from a damp sheen where the sea just was.
               const wet = wetCol[x] > y ? Math.exp(-(y - shore) / 5) : 0;
               const r = hash(x, y, 3);
-              const toEdge = clamp((rows - 1 - y) / 4); // sand dissolves into nothing at the edge
+              // The sand dissolves into nothing between the highest tide and the edge.
+              const toEdge = 1 - smooth(foldRows * CREST + 2, rows - 2, y);
               if (r < (0.04 + 0.22 * wet) * toEdge) {
                 glyph = r < 0.03 ? "." : ":";
                 tier = wet > 0.5 ? 1 : 0;
@@ -405,7 +413,7 @@ export default function AsciiIntro({ links }: { links: Link[] }) {
               glyph = RAMP[idx];
               tier = idx < 3 ? 0 : idx < 5 ? 1 : idx < 7 ? 2 : 3;
               const foam = edge < 3 ? act * (1 - edge / 3) : 0;
-              if (foam > 0 && quiet > 0.5 && shore < rows + 0.5 && hash(x, y, tick >> 1) < foam * 0.9) {
+              if (foam > 0 && quiet > 0.5 && hash(x, y, tick >> 1) < foam * 0.9) {
                 glyph = "*:~'"[Math.floor(hash(x, y, 9) * 4)];
                 tier = 3;
               }
@@ -478,18 +486,19 @@ export default function AsciiIntro({ links }: { links: Link[] }) {
         const label = t < P2_START ? "LOADING" : "DECODING";
         ctx.font = `${fontSize + 2}px ${family}`;
         ctx.fillStyle = `rgba(214, 226, 255, ${0.9 * alpha})`;
-        ctx.fillText(`${label} ${String(pct).padStart(3, "0")}%`, 20, h - 36);
+        ctx.fillText(`${label} ${String(pct).padStart(3, "0")}%`, 20, foldH - 36);
       }
 
       if (!reduced) raf = requestAnimationFrame(frame);
     };
 
+    const host = canvas.parentElement ?? canvas;
     const onMove = (e: PointerEvent) => {
       const r = canvas.getBoundingClientRect();
       pointer.x = e.clientX - r.left;
       pointer.y = e.clientY - r.top;
       pointer.active =
-        pointer.x >= 0 && pointer.y >= 0 && pointer.x <= r.width && pointer.y <= r.height;
+        pointer.x >= 0 && pointer.y >= 0 && pointer.x <= r.width && pointer.y <= foldH;
       if (live && pointer.active && lastPtr.set) {
         const speed = Math.hypot(pointer.x - lastPtr.x, pointer.y - lastPtr.y);
         if (speed > 3) splash(pointer.x, pointer.y, clamp(speed / 60) * 0.45, 24);
@@ -506,6 +515,7 @@ export default function AsciiIntro({ links }: { links: Link[] }) {
       const r = canvas.getBoundingClientRect();
       const x = e.clientX - r.left;
       const y = e.clientY - r.top;
+      if (y > foldH) return;
       splash(x, y, 2.4, 52);
       const hit = hitAt(x, y);
       if (!hit) return;
@@ -532,7 +542,7 @@ export default function AsciiIntro({ links }: { links: Link[] }) {
     ro.observe(canvas);
     window.addEventListener("pointermove", onMove, { passive: true });
     document.addEventListener("pointerleave", onLeave);
-    canvas.addEventListener("click", onClick);
+    host.addEventListener("click", onClick);
 
     return () => {
       disposed = true;
@@ -540,7 +550,7 @@ export default function AsciiIntro({ links }: { links: Link[] }) {
       ro.disconnect();
       window.removeEventListener("pointermove", onMove);
       document.removeEventListener("pointerleave", onLeave);
-      canvas.removeEventListener("click", onClick);
+      host.removeEventListener("click", onClick);
     };
   }, [links]);
 
@@ -548,7 +558,8 @@ export default function AsciiIntro({ links }: { links: Link[] }) {
     <canvas
       ref={canvasRef}
       aria-hidden="true"
-      className="absolute inset-0 h-full w-full"
+      className="pointer-events-none absolute left-0 top-0 w-full"
+      style={{ height: `${EXTEND * 100}%` }}
     />
   );
 }
