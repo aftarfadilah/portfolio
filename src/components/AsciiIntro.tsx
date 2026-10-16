@@ -19,7 +19,6 @@ const LINK_RGBA = [120, 160, 245, 0.95];
 const HOVER_RGBA = [255, 255, 255, 1];
 const BLEND_TO = [96, 140, 235, 0.55];
 const STEPS = 8;
-const BLEND_RADIUS = 170;
 
 const TAGLINE = "SOFTWARE ENGINEER & FOUNDER";
 const SUBLINE = "QA ENGINEER AT NOSCAI. FOUNDER OF SHIRO LABS.";
@@ -27,20 +26,22 @@ const SUBLINE = "QA ENGINEER AT NOSCAI. FOUNDER OF SHIRO LABS.";
 // Timeline (seconds)
 //   Phase 1: the field renders left to right behind a scramble slab.
 //   Phase 2: name, role and contact links decode out of scrambled ASCII.
-//   Phase 3: idle; hover blend, clicks and ripples are live.
+//   Phase 3: idle; clicks, hover and water waves are live.
 const SLAB_WIDTH = 0.12; // width of the scramble slab, as a fraction of the grid
 const P1_END = 2.4;
 const P2_START = P1_END;
 const P2_END = 4.2;
 const SCRAMBLE_LIFE = 0.85; // how long a cell stays scrambled before it settles
-const RIPPLE_LIFE = 2.2;
-const RIPPLE_SPEED = 640; // px / s
+
+// Water: a height-field wave simulation stepped at a fixed rate.
+const WATER_STEP = 1 / 120;
+const WATER_K = 0.28; // wave stiffness (wave speed ~ 400px/s)
+const WATER_DAMP = 0.9962; // per step; ripples fade over ~2s
 export const ASCII_INTRO_DURATION = P2_END;
 
 type Link = { label: string; href: string };
 type Kind = 0 | 1 | 2; // name | body | link
 type TextCell = { x: number; y: number; ch: string; kind: Kind; link: number };
-type Ripple = { x: number; y: number; t0: number };
 type Hit = { x0: number; x1: number; y0: number; y1: number; link: number };
 
 function clamp(v: number, lo = 0, hi = 1) {
@@ -95,7 +96,17 @@ export default function AsciiIntro({ links }: { links: Link[] }) {
     let textCells: TextCell[] = [];
     let hits: Hit[] = [];
     let live = false; // phase 3: interaction enabled
-    const ripples: Ripple[] = [];
+    let water = new Float32Array(0); // surface height per cell
+    let vel = new Float32Array(0);
+    let wx = 0.85; // horizontal / vertical neighbour weights (cells are ~1:2.4)
+    let wy = 0.15;
+    let acc = 0;
+    let lastNow = -1;
+    let nextDrop = 0;
+    const lastPtr = { x: 0, y: 0, set: false };
+    let ox = 0; // scratch: float offset of the text cell being drawn
+    let oy = 0;
+    let os = 0;
     let raf = 0;
     let disposed = false;
     const start = performance.now();
@@ -197,38 +208,61 @@ export default function AsciiIntro({ links }: { links: Link[] }) {
       cols = Math.ceil(w / cw) + 1;
       rows = Math.ceil(h / ch) + 1;
       buildLayout();
+      water = new Float32Array(cols * rows);
+      vel = new Float32Array(cols * rows);
+      const ix = 1 / (cw * cw);
+      const iy = 1 / (ch * ch);
+      wx = ix / (ix + iy);
+      wy = iy / (ix + iy);
     };
 
-    const rippleAt = (px: number, py: number, t: number) => {
-      let sum = 0;
-      for (const r of ripples) {
-        const age = t - r.t0;
-        if (age < 0 || age > RIPPLE_LIFE) continue;
-        const d = Math.hypot(px - r.x, py - r.y);
-        const edge = (d - age * RIPPLE_SPEED) / 80;
-        sum += Math.exp(-edge * edge) * (1 - age / RIPPLE_LIFE);
-      }
-      return sum;
-    };
+    const swell = (x: number, y: number, t: number) =>
+      0.5 +
+      0.25 * Math.sin(x * 0.09 + t * 0.7 + Math.sin(y * 0.12 - t * 0.45) * 1.6) +
+      0.25 * Math.sin(y * 0.16 + x * 0.04 - t * 0.55);
 
-    const fieldValue = (x: number, y: number, t: number, gain: number) => {
-      let v =
-        0.5 +
-        0.25 * Math.sin(x * 0.09 + t * 0.7 + Math.sin(y * 0.12 - t * 0.45) * 1.6) +
-        0.25 * Math.sin(y * 0.16 + x * 0.04 - t * 0.55);
-      if (live) {
-        if (pointer.active) {
-          const dx = x * cw - pointer.x;
-          const dy = y * ch - pointer.y;
-          const d = Math.sqrt(dx * dx + dy * dy);
-          if (d < 220) {
-            const fall = 1 - d / 220;
-            v += fall * fall * (0.55 + 0.25 * Math.sin(d * 0.08 - t * 7));
-          }
+    /** Push the water surface down around a point (a drop or a finger). */
+    const splash = (px: number, py: number, amp: number, radius: number) => {
+      const x0 = Math.max(0, Math.floor((px - radius * 2) / cw));
+      const x1 = Math.min(cols - 1, Math.ceil((px + radius * 2) / cw));
+      const y0 = Math.max(0, Math.floor((py - radius * 2) / ch));
+      const y1 = Math.min(rows - 1, Math.ceil((py + radius * 2) / ch));
+      for (let y = y0; y <= y1; y++) {
+        for (let x = x0; x <= x1; x++) {
+          const dx = (x + 0.5) * cw - px;
+          const dy = (y + 0.5) * ch - py;
+          const i = y * cols + x;
+          water[i] = Math.max(-3, Math.min(3, water[i] - amp * Math.exp(-(dx * dx + dy * dy) / (radius * radius))));
         }
-        v += rippleAt(x * cw, y * ch, t) * 1.3;
       }
-      return clamp(v * gain * 2);
+    };
+
+    const stepWater = () => {
+      for (let y = 0; y < rows; y++) {
+        for (let x = 0; x < cols; x++) {
+          const i = y * cols + x;
+          const c = water[i];
+          const l = water[x > 0 ? i - 1 : i];
+          const r = water[x < cols - 1 ? i + 1 : i];
+          const u = water[y > 0 ? i - cols : i];
+          const d = water[y < rows - 1 ? i + cols : i];
+          const lap = wx * (l + r - 2 * c) + wy * (u + d - 2 * c);
+          vel[i] = (vel[i] + WATER_K * lap) * WATER_DAMP;
+        }
+      }
+      for (let i = 0; i < water.length; i++) water[i] += vel[i];
+    };
+
+    /** How the water moves a floating glyph: bob with height, slide downhill. */
+    const floatAt = (x: number, y: number, t: number) => {
+      const i = y * cols + x;
+      const hv = water[i];
+      const gx = (water[x < cols - 1 ? i + 1 : i] - water[x > 0 ? i - 1 : i]) * 0.5;
+      const gy = (water[y < rows - 1 ? i + cols : i] - water[y > 0 ? i - cols : i]) * 0.5;
+      ox = clamp(-gx * cw * 3, -2 * cw, 2 * cw) + Math.sin(y * 0.3 + t * 1.1) * cw * 0.15;
+      oy =
+        clamp(-hv * ch * 0.6, -1.4 * ch, 1.4 * ch) + Math.sin(x * 0.05 + t * 1.5) * ch * 0.07;
+      os = Math.hypot(gx, gy);
     };
 
     const hitAt = (px: number, py: number) =>
@@ -238,14 +272,31 @@ export default function AsciiIntro({ links }: { links: Link[] }) {
       if (disposed) return;
       const t = reduced ? ASCII_INTRO_DURATION + 1 : (now - start) / 1000;
       live = t >= P2_END;
-      for (let i = ripples.length - 1; i >= 0; i--) {
-        if (t - ripples[i].t0 > RIPPLE_LIFE) ripples.splice(i, 1);
-      }
       const w = canvas.clientWidth;
       const h = canvas.clientHeight;
       ctx.clearRect(0, 0, w, h);
       ctx.font = `${fontSize}px ${family}`;
       ctx.textBaseline = "top";
+
+      // Water simulation (starts as phase 2 begins).
+      if (!reduced && t >= P2_START) {
+        if (lastNow < 0) lastNow = now;
+        acc = Math.min(0.1, acc + (now - lastNow) / 1000);
+        lastNow = now;
+        while (acc >= WATER_STEP) {
+          stepWater();
+          acc -= WATER_STEP;
+        }
+        if (t > nextDrop) {
+          splash(
+            Math.random() * w,
+            Math.random() * h,
+            0.6 + Math.random() * 0.5,
+            26 + Math.random() * 14,
+          );
+          nextDrop = t + 1.2 + Math.random() * 2;
+        }
+      }
 
       const sweep = clamp(t / P1_END) * 1.25;
       const decode = smooth(P2_START, P2_START + 0.8, t);
@@ -257,20 +308,6 @@ export default function AsciiIntro({ links }: { links: Link[] }) {
 
       const lines: string[][] = TIERS.map(() => new Array<string>(rows));
       const rowBuf: string[][] = TIERS.map(() => new Array<string>(cols));
-      const blendAt = (x: number, y: number) => {
-        if (!live) return 0;
-        let b = 0;
-        if (pointer.active) {
-          const dx = (x + 0.5) * cw - pointer.x;
-          const dy = (y + 0.5) * ch - pointer.y;
-          const d = Math.sqrt(dx * dx + dy * dy);
-          if (d < BLEND_RADIUS) b = Math.pow(1 - d / BLEND_RADIUS, 1.4);
-        }
-        // Click ripples dissolve the text as the wave passes over it.
-        const wave = rippleAt((x + 0.5) * cw, (y + 0.5) * ch, t);
-        return Math.min(1, Math.max(b, wave * 0.9));
-      };
-
       for (let y = 0; y < rows; y++) {
         for (let x = 0; x < cols; x++) {
           const nx = x / cols;
@@ -283,9 +320,14 @@ export default function AsciiIntro({ links }: { links: Link[] }) {
             glyph = SCRAMBLE[Math.floor(hash(x, y, tick) * SCRAMBLE.length)];
             tier = 3;
           } else {
-            // The field fades out behind text only once it starts decoding.
-            const gain = baseGain * (1 - halo[y * cols + x] * decode);
-            const idx = Math.floor(fieldValue(x, y, t, gain) * (RAMP.length - 1));
+            // Swell + wave height + lighting from the water slope; quieter
+            // behind text once it starts decoding.
+            const i = y * cols + x;
+            const gx = (water[x < cols - 1 ? i + 1 : i] - water[x > 0 ? i - 1 : i]) * 0.5;
+            const gy = (water[y < rows - 1 ? i + cols : i] - water[y > 0 ? i - cols : i]) * 0.5;
+            const quiet = 1 - 0.85 * halo[i] * decode;
+            const v = (swell(x, y, t) * baseGain * 2 + water[i] * 0.7 - (gx + gy) * 1.5) * quiet;
+            const idx = Math.floor(clamp(v) * (RAMP.length - 1));
             glyph = RAMP[idx];
             tier = idx < 3 ? 0 : idx < 5 ? 1 : idx < 7 ? 2 : 3;
           }
@@ -312,14 +354,11 @@ export default function AsciiIntro({ links }: { links: Link[] }) {
         scrambling: boolean,
       ) => {
         const isHover = hover !== undefined && hover.link === linkIdx && kind === 2;
-        const b = blendAt(x, y) * (isHover ? 0.25 : 1);
-        if (b > 0 && hash(x, y, tick) < b * 0.9) {
-          const idx = Math.max(1, Math.floor(fieldValue(x, y, t, 0.5) * (RAMP.length - 1)));
-          glyph = RAMP[idx];
-        }
-        const step = scrambling ? 3 : Math.round(b * STEPS);
-        ctx.fillStyle = isHover ? hoverColors[step] : colors[kind][step];
-        ctx.fillText(glyph, x * cw, y * ch);
+        floatAt(x, y, t);
+        // Crests catch the water colour a little.
+        const step = scrambling ? 3 : Math.round(clamp(os * 1.4, 0, 0.5) * STEPS);
+        ctx.fillStyle = isHover ? hoverColors[0] : colors[kind][step];
+        ctx.fillText(glyph, x * cw + ox, y * ch + oy);
       };
 
       // Phase 2: every cell decodes on its own delay, sweeping left to right.
@@ -368,6 +407,13 @@ export default function AsciiIntro({ links }: { links: Link[] }) {
       pointer.y = e.clientY - r.top;
       pointer.active =
         pointer.x >= 0 && pointer.y >= 0 && pointer.x <= r.width && pointer.y <= r.height;
+      if (live && pointer.active && lastPtr.set) {
+        const speed = Math.hypot(pointer.x - lastPtr.x, pointer.y - lastPtr.y);
+        if (speed > 3) splash(pointer.x, pointer.y, clamp(speed / 60) * 0.45, 24);
+      }
+      lastPtr.x = pointer.x;
+      lastPtr.y = pointer.y;
+      lastPtr.set = pointer.active;
     };
     const onLeave = () => {
       pointer.active = false;
@@ -377,8 +423,7 @@ export default function AsciiIntro({ links }: { links: Link[] }) {
       const r = canvas.getBoundingClientRect();
       const x = e.clientX - r.left;
       const y = e.clientY - r.top;
-      if (ripples.length >= 4) ripples.shift();
-      ripples.push({ x, y, t0: (performance.now() - start) / 1000 });
+      splash(x, y, 2.4, 52);
       const hit = hitAt(x, y);
       if (!hit) return;
       const link = links[hit.link];
