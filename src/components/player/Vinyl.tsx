@@ -62,7 +62,7 @@ export function Vinyl({ videoId, simRef, resetToken, onSeat, onUnseat }: VinylPr
   }, [videoId]);
 
   const holoGeometry = useMemo(() => {
-    const g = new THREE.CircleGeometry(RECORD_RADIUS, 96);
+    const g = new THREE.CircleGeometry(LABEL_RADIUS, 64);
     g.rotateX(-Math.PI / 2);
     return g;
   }, []);
@@ -71,8 +71,7 @@ export function Vinyl({ videoId, simRef, resetToken, onSeat, onUnseat }: VinylPr
     () => ({
       uTime: { value: 0 },
       uLight: { value: new THREE.Vector2(1, 0) },
-      uRadius: { value: RECORD_RADIUS },
-      uLabel: { value: LABEL_RADIUS / RECORD_RADIUS },
+      uRadius: { value: LABEL_RADIUS },
       uIntensity: { value: 1 },
     }),
     [],
@@ -259,7 +258,7 @@ export function Vinyl({ videoId, simRef, resetToken, onSeat, onUnseat }: VinylPr
             <meshStandardMaterial
               key={label ? "label" : "blank"}
               map={label}
-              color={label ? "#ffffff" : "#c9c2b0"}
+              color={label ? "#9c9c9c" : "#c9c2b0"}
               roughness={0.5}
               polygonOffset
               polygonOffsetFactor={-2}

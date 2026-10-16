@@ -20,6 +20,19 @@ const ERROR_TEXT: Partial<Record<number, string>> = {
   150: "The owner doesn't allow this video to be embedded.",
 };
 
+const VOLUME_KEY = "player-volume";
+
+function readStoredVolume(): number {
+  try {
+    const stored = localStorage.getItem(VOLUME_KEY);
+    if (stored !== null) {
+      const value = Number(stored);
+      if (Number.isFinite(value)) return Math.min(100, Math.max(0, Math.round(value)));
+    }
+  } catch {}
+  return 80;
+}
+
 function formatTime(seconds: number) {
   const s = Math.max(0, Math.floor(seconds));
   return `${Math.floor(s / 60)}:${String(s % 60).padStart(2, "0")}`;
@@ -34,10 +47,13 @@ export default function PlayerApp() {
   const [want, setWant] = useState(false);
   const [resetToken, setResetToken] = useState(0);
   const [clock, setClock] = useState({ time: 0, duration: 0 });
+  const [volume, setVolumeUI] = useState(readStoredVolume);
 
   const wantRef = useRef(false);
   const seatedRef = useRef(false);
   const freshRef = useRef(true);
+  const volumeRef = useRef(volume);
+  const audibleRef = useRef(false);
   const progressRef = useRef(0);
   const requestRef = useRef(0);
   const fadeRef = useRef<ReturnType<typeof setInterval> | null>(null);
@@ -72,12 +88,14 @@ export default function PlayerApp() {
   const startPlayback = useCallback(() => {
     const player = playerRef.current;
     if (!player) return;
+    audibleRef.current = false;
     player.setVolume(0);
     player.playVideo();
   }, [playerRef]);
 
   const stopPlayback = useCallback(() => {
     clearTimers();
+    audibleRef.current = false;
     try {
       playerRef.current?.pauseVideo();
     } catch {}
@@ -164,13 +182,15 @@ export default function PlayerApp() {
     }
     player.playVideo();
     if (fadeRef.current) clearInterval(fadeRef.current);
-    let volume = 0;
+    let level = 0;
     fadeRef.current = setInterval(() => {
-      volume = Math.min(100, volume + 8);
-      player.setVolume(volume);
-      if (volume >= 100 && fadeRef.current) {
+      const target = volumeRef.current;
+      level = Math.min(target, level + 8);
+      player.setVolume(level);
+      if (level >= target && fadeRef.current) {
         clearInterval(fadeRef.current);
         fadeRef.current = null;
+        audibleRef.current = true;
       }
     }, 40);
     if (watchdogRef.current) clearTimeout(watchdogRef.current);
@@ -222,6 +242,21 @@ export default function PlayerApp() {
       }
     } finally {
       if (request === requestRef.current) setLoading(false);
+    }
+  }
+
+  function changeVolume(value: number) {
+    setVolumeUI(value);
+    volumeRef.current = value;
+    try {
+      localStorage.setItem(VOLUME_KEY, String(value));
+    } catch {}
+    // Until the needle is down the video is deliberately silent; the fade-in
+    // picks up the new level by itself.
+    if (audibleRef.current) {
+      try {
+        playerRef.current?.setVolume(value);
+      } catch {}
     }
   }
 
@@ -323,6 +358,20 @@ export default function PlayerApp() {
                 <span>{formatTime(clock.time)}</span>
                 <span>{formatTime(clock.duration)}</span>
               </div>
+              <label className="mt-3 flex items-center gap-3 font-mono text-[10px] text-muted-foreground">
+                <span className="w-12 uppercase tracking-widest">Volume</span>
+                <input
+                  type="range"
+                  min={0}
+                  max={100}
+                  step={1}
+                  value={volume}
+                  onChange={(e) => changeVolume(Number(e.target.value))}
+                  aria-label="Volume"
+                  className="h-1 flex-1 cursor-pointer accent-primary"
+                />
+                <span className="w-8 text-right tabular-nums">{volume}</span>
+              </label>
               <button
                 onClick={togglePlay}
                 className="mt-3 w-full rounded-md border border-border bg-muted px-3 py-2 text-xs font-medium transition-colors hover:border-primary"
