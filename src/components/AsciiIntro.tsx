@@ -37,11 +37,28 @@ const SCRAMBLE_LIFE = 0.85; // how long a cell stays scrambled before it settles
 const WATER_STEP = 1 / 120;
 const WATER_K = 0.28; // wave stiffness (wave speed ~ 400px/s)
 const WATER_DAMP = 0.9962; // per step; ripples fade over ~2s
+
+// Beach: the bottom of the hero is a shore. Surf rolls in, steepens, breaks
+// into foam and washes up the sand, and everything fades out at the edge.
+const SHORE = 0.84; // shoreline as a fraction of the height
+const SURF_FROM = 0.72; // where new swells start
+const FADE_FROM = 0.82; // the bottom fades to nothing from here
 export const ASCII_INTRO_DURATION = P2_END;
 
 type Link = { label: string; href: string };
 type Kind = 0 | 1 | 2; // name | body | link
 type TextCell = { x: number; y: number; ch: string; kind: Kind; link: number };
+type Front = {
+  y: number; // rows
+  ph: number;
+  amp: number;
+  dir: 1 | -1; // 1 = rolling in, -1 = backwash
+  p: number; // 0..1 progress towards the shore
+  sig: number; // crest width
+  A: number; // crest height
+  fm: number; // foam amount
+  trail: number; // foam trail length (rows)
+};
 type Hit = { x0: number; x1: number; y0: number; y1: number; link: number };
 
 function clamp(v: number, lo = 0, hi = 1) {
@@ -104,6 +121,9 @@ export default function AsciiIntro({ links }: { links: Link[] }) {
     let lastNow = -1;
     let nextDrop = 0;
     const lastPtr = { x: 0, y: 0, set: false };
+    const fronts: Front[] = [];
+    let nextSurf = 0;
+    let beachDamp = new Float32Array(0);
     let ox = 0; // scratch: float offset of the text cell being drawn
     let oy = 0;
     let os = 0;
@@ -214,6 +234,9 @@ export default function AsciiIntro({ links }: { links: Link[] }) {
       const iy = 1 / (ch * ch);
       wx = ix / (ix + iy);
       wy = iy / (ix + iy);
+      // Sponge near the beach so ripples die out instead of reflecting.
+      beachDamp = new Float32Array(rows);
+      for (let y = 0; y < rows; y++) beachDamp[y] = 1 - 0.05 * smooth(0.74, 0.92, y / rows);
     };
 
     const swell = (x: number, y: number, t: number) =>
@@ -239,6 +262,7 @@ export default function AsciiIntro({ links }: { links: Link[] }) {
 
     const stepWater = () => {
       for (let y = 0; y < rows; y++) {
+        const damp = WATER_DAMP * beachDamp[y];
         for (let x = 0; x < cols; x++) {
           const i = y * cols + x;
           const c = water[i];
@@ -247,10 +271,55 @@ export default function AsciiIntro({ links }: { links: Link[] }) {
           const u = water[y > 0 ? i - cols : i];
           const d = water[y < rows - 1 ? i + cols : i];
           const lap = wx * (l + r - 2 * c) + wy * (u + d - 2 * c);
-          vel[i] = (vel[i] + WATER_K * lap) * WATER_DAMP;
+          vel[i] = (vel[i] + WATER_K * lap) * damp;
         }
       }
-      for (let i = 0; i < water.length; i++) water[i] += vel[i];
+      for (let y = 0; y < rows; y++) {
+        const keep = 1 - (1 - beachDamp[y]) * 0.25;
+        for (let x = 0; x < cols; x++) {
+          const i = y * cols + x;
+          water[i] = (water[i] + vel[i]) * keep;
+        }
+      }
+    };
+
+    const shoreAt = (x: number) =>
+      rows * SHORE + 0.9 * Math.sin(x * 0.03 + 1) + 0.5 * Math.sin(x * 0.08);
+
+    const frontY = (f: Front, x: number) =>
+      f.y + 1.1 * Math.sin(x * 0.035 + f.ph) + 0.6 * Math.sin(x * 0.09 + f.ph * 2);
+
+    const updateSurf = (t: number, dt: number) => {
+      const y0 = rows * SURF_FROM;
+      const shoreRow = rows * SHORE;
+      if (t > nextSurf) {
+        fronts.push({
+          y: y0, ph: Math.random() * 6.28, amp: 0.55 + Math.random() * 0.3,
+          dir: 1, p: 0, sig: 1.8, A: 0.4, fm: 0, trail: 1,
+        });
+        nextSurf = t + 3.2 + Math.random() * 2.2;
+      }
+      for (let i = fronts.length - 1; i >= 0; i--) {
+        const f = fronts[i];
+        if (f.dir > 0) {
+          // Slows down as the water shoals.
+          const k = clamp((shoreRow - f.y) / (shoreRow - y0));
+          f.y += 2.4 * (0.3 + 0.7 * k) * dt;
+          if (f.y >= shoreRow + 2.6) f.dir = -1;
+        } else {
+          f.y -= 2 * dt;
+          f.amp -= 0.45 * dt;
+          if (f.amp <= 0.05 || f.y <= shoreRow - 0.3) {
+            fronts.splice(i, 1);
+            continue;
+          }
+        }
+        f.p = clamp((f.y - y0) / (shoreRow - y0));
+        f.sig = 1.8 - 0.9 * f.p;
+        f.A = f.amp * (0.6 + 0.9 * f.p);
+        f.fm = clamp((f.p - 0.6) / 0.4);
+        f.trail = 1.5 + 3 * f.fm;
+      }
     };
 
     /** How the water moves a floating glyph: bob with height, slide downhill. */
@@ -281,8 +350,10 @@ export default function AsciiIntro({ links }: { links: Link[] }) {
       // Water simulation (starts as phase 2 begins).
       if (!reduced && t >= P2_START) {
         if (lastNow < 0) lastNow = now;
-        acc = Math.min(0.1, acc + (now - lastNow) / 1000);
+        const dt = Math.min(0.05, (now - lastNow) / 1000);
+        acc = Math.min(0.1, acc + dt);
         lastNow = now;
+        updateSurf(t, dt);
         while (acc >= WATER_STEP) {
           stepWater();
           acc -= WATER_STEP;
@@ -320,16 +391,50 @@ export default function AsciiIntro({ links }: { links: Link[] }) {
             glyph = SCRAMBLE[Math.floor(hash(x, y, tick) * SCRAMBLE.length)];
             tier = 3;
           } else {
-            // Swell + wave height + lighting from the water slope; quieter
-            // behind text once it starts decoding.
             const i = y * cols + x;
-            const gx = (water[x < cols - 1 ? i + 1 : i] - water[x > 0 ? i - 1 : i]) * 0.5;
-            const gy = (water[y < rows - 1 ? i + cols : i] - water[y > 0 ? i - cols : i]) * 0.5;
-            const quiet = 1 - 0.85 * halo[i] * decode;
-            const v = (swell(x, y, t) * baseGain * 2 + water[i] * 0.7 - (gx + gy) * 1.5) * quiet;
-            const idx = Math.floor(clamp(v) * (RAMP.length - 1));
-            glyph = RAMP[idx];
-            tier = idx < 3 ? 0 : idx < 5 ? 1 : idx < 7 ? 2 : 3;
+            const shore = shoreAt(x);
+            if (y > shore) {
+              // Sand, wetter near the waterline, with swash washing over it.
+              const wet = Math.exp(-(y - shore) / 2.5);
+              let film = 0;
+              for (const f of fronts) {
+                const fy = frontY(f, x);
+                if (fy > shore && y < fy) film = Math.max(film, f.amp * (1 - ((fy - y) / (fy - shore + 0.01)) * 0.5));
+              }
+              const r = hash(x, y, 3);
+              if (film > 0.08 && hash(x, y, tick >> 1) < 0.35 + film * 0.6) {
+                glyph = ":.~"[Math.floor(hash(x, y, 5) * 3)];
+                tier = film > 0.5 ? 3 : 2;
+              } else if (r < 0.1 + 0.25 * wet) {
+                glyph = r < 0.05 ? "." : ":";
+                tier = wet > 0.4 ? 1 : 0;
+              }
+            } else {
+              // Swell + wave height + lighting from the water slope + surf
+              // crests; quieter behind text once it starts decoding.
+              const gx = (water[x < cols - 1 ? i + 1 : i] - water[x > 0 ? i - 1 : i]) * 0.5;
+              const gy = (water[y < rows - 1 ? i + cols : i] - water[y > 0 ? i - cols : i]) * 0.5;
+              const quiet = 1 - 0.85 * halo[i] * decode;
+              let crest = 0;
+              let foam = 0;
+              for (const f of fronts) {
+                const d = y - frontY(f, x);
+                const e = d / (d > 0 ? f.sig * 0.6 : f.sig * 1.4);
+                crest += f.A * Math.exp(-e * e);
+                if (f.dir > 0 && d <= 0.6 && d > -f.trail) foam = Math.max(foam, f.fm * (1 + d / f.trail));
+              }
+              const lap = smooth(shore - 1.6, shore, y) * 0.35; // lapping at the waterline
+              const v =
+                (swell(x, y, t) * baseGain * 2 + water[i] * 0.7 - (gx + gy) * 1.5 + crest * 0.7 + lap) *
+                quiet;
+              const idx = Math.floor(clamp(v) * (RAMP.length - 1));
+              glyph = RAMP[idx];
+              tier = idx < 3 ? 0 : idx < 5 ? 1 : idx < 7 ? 2 : 3;
+              if (foam > 0 && quiet > 0.5 && hash(x, y, tick >> 1) < foam * 0.9) {
+                glyph = "*:~'"[Math.floor(hash(x, y, 9) * 4)];
+                tier = 3;
+              }
+            }
           }
 
           for (let k = 0; k < TIERS.length; k++) {
@@ -341,8 +446,13 @@ export default function AsciiIntro({ links }: { links: Link[] }) {
 
       for (let k = 0; k < TIERS.length; k++) {
         ctx.fillStyle = TIERS[k];
-        for (let y = 0; y < rows; y++) ctx.fillText(lines[k][y], 0, y * ch);
+        for (let y = 0; y < rows; y++) {
+          // The bottom edge dissolves instead of being cut off.
+          ctx.globalAlpha = 1 - smooth(FADE_FROM, 1, y / (rows - 1));
+          ctx.fillText(lines[k][y], 0, y * ch);
+        }
       }
+      ctx.globalAlpha = 1;
 
       // Foreground text, drawn per cell so it can scramble in and blend out.
       const drawCell = (
