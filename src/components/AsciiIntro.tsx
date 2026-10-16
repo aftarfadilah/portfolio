@@ -40,11 +40,11 @@ const WATER_DAMP = 0.9962; // per step; ripples fade over ~2s
 
 // Beach: the canvas runs past the fold of the hero (EXTEND x the fold height)
 // so nothing is ever clipped. The waterline swings between REST and CREST
-// (fractions of the fold height): the sea rushes down over the empty sand,
+// (fractions of the fold = bottom of the viewport): the sea rushes down over the empty sand,
 // then drains back, and the sand dissolves into nothing well before the edge.
-const EXTEND = 1.55; // canvas height as a multiple of the fold
-const REST = 0.82; // waterline at low tide
-const CREST = 1.25; // waterline at high tide
+const EXTEND = 1.3; // canvas height as a multiple of the fold
+const REST = 0.9; // waterline at low tide
+const CREST = 1.1; // waterline at high tide
 const TIDE_PERIOD = 12; // seconds per wave cycle
 const TIDE_RUSH = 3.2; // sea running up the sand
 const TIDE_HOLD = 1.1; // sea at its highest
