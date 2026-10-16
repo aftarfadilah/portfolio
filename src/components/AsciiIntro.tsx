@@ -24,17 +24,23 @@ const BLEND_RADIUS = 170;
 const TAGLINE = "SOFTWARE ENGINEER & FOUNDER";
 const SUBLINE = "QA ENGINEER AT NOSCAI. FOUNDER OF SHIRO LABS.";
 
+// Timeline (seconds)
+//   Phase 1: the field renders left to right behind a scramble slab.
+//   Phase 2: name, role and contact links decode out of scrambled ASCII.
+//   Phase 3: idle; hover blend, clicks and ripples are live.
 const SLAB_WIDTH = 0.12; // width of the scramble slab, as a fraction of the grid
-const SWEEP_END = 2.2; // seconds until the scramble has settled everywhere
-const MASK_IN = 0.7;
-const TEXT_IN = 1.6;
-const LOADING_OUT_START = 2.6;
-const LOADING_OUT_END = 3.6;
-export const ASCII_INTRO_DURATION = LOADING_OUT_END;
+const P1_END = 2.4;
+const P2_START = P1_END;
+const P2_END = 4.2;
+const SCRAMBLE_LIFE = 0.85; // how long a cell stays scrambled before it settles
+const RIPPLE_LIFE = 2.2;
+const RIPPLE_SPEED = 640; // px / s
+export const ASCII_INTRO_DURATION = P2_END;
 
 type Link = { label: string; href: string };
 type Kind = 0 | 1 | 2; // name | body | link
 type TextCell = { x: number; y: number; ch: string; kind: Kind; link: number };
+type Ripple = { x: number; y: number; t0: number };
 type Hit = { x0: number; x1: number; y0: number; y1: number; link: number };
 
 function clamp(v: number, lo = 0, hi = 1) {
@@ -88,6 +94,8 @@ export default function AsciiIntro({ links }: { links: Link[] }) {
     let halo = new Float32Array(0);
     let textCells: TextCell[] = [];
     let hits: Hit[] = [];
+    let live = false; // phase 3: interaction enabled
+    const ripples: Ripple[] = [];
     let raf = 0;
     let disposed = false;
     const start = performance.now();
@@ -191,19 +199,34 @@ export default function AsciiIntro({ links }: { links: Link[] }) {
       buildLayout();
     };
 
+    const rippleAt = (px: number, py: number, t: number) => {
+      let sum = 0;
+      for (const r of ripples) {
+        const age = t - r.t0;
+        if (age < 0 || age > RIPPLE_LIFE) continue;
+        const d = Math.hypot(px - r.x, py - r.y);
+        const edge = (d - age * RIPPLE_SPEED) / 80;
+        sum += Math.exp(-edge * edge) * (1 - age / RIPPLE_LIFE);
+      }
+      return sum;
+    };
+
     const fieldValue = (x: number, y: number, t: number, gain: number) => {
       let v =
         0.5 +
         0.25 * Math.sin(x * 0.09 + t * 0.7 + Math.sin(y * 0.12 - t * 0.45) * 1.6) +
         0.25 * Math.sin(y * 0.16 + x * 0.04 - t * 0.55);
-      if (pointer.active) {
-        const dx = x * cw - pointer.x;
-        const dy = y * ch - pointer.y;
-        const d = Math.sqrt(dx * dx + dy * dy);
-        if (d < 220) {
-          const fall = 1 - d / 220;
-          v += fall * fall * (0.55 + 0.25 * Math.sin(d * 0.08 - t * 7));
+      if (live) {
+        if (pointer.active) {
+          const dx = x * cw - pointer.x;
+          const dy = y * ch - pointer.y;
+          const d = Math.sqrt(dx * dx + dy * dy);
+          if (d < 220) {
+            const fall = 1 - d / 220;
+            v += fall * fall * (0.55 + 0.25 * Math.sin(d * 0.08 - t * 7));
+          }
         }
+        v += rippleAt(x * cw, y * ch, t) * 1.3;
       }
       return clamp(v * gain * 2);
     };
@@ -214,31 +237,38 @@ export default function AsciiIntro({ links }: { links: Link[] }) {
     const frame = (now: number) => {
       if (disposed) return;
       const t = reduced ? ASCII_INTRO_DURATION + 1 : (now - start) / 1000;
+      live = t >= P2_END;
+      for (let i = ripples.length - 1; i >= 0; i--) {
+        if (t - ripples[i].t0 > RIPPLE_LIFE) ripples.splice(i, 1);
+      }
       const w = canvas.clientWidth;
       const h = canvas.clientHeight;
       ctx.clearRect(0, 0, w, h);
       ctx.font = `${fontSize}px ${family}`;
       ctx.textBaseline = "top";
 
-      const sweep = clamp(t / SWEEP_END) * 1.25;
-      // Text is revealed only once the slab has passed over it.
-      const revealEdge = t < SWEEP_END + 0.3 ? sweep - SLAB_WIDTH : Infinity;
-      const nameAmt = smooth(0.4, MASK_IN + 0.8, t);
-      const textAmt = smooth(TEXT_IN, TEXT_IN + 1, t);
-      const settled = smooth(LOADING_OUT_START, LOADING_OUT_END + 0.4, t);
+      const sweep = clamp(t / P1_END) * 1.25;
+      const decode = smooth(P2_START, P2_START + 0.8, t);
+      const settled = smooth(P2_START, P2_END, t);
       const baseGain = 0.5 - 0.1 * settled;
       const tick = Math.floor(t * 14);
-      const hover = pointer.active ? hitAt(pointer.x, pointer.y) : undefined;
+      const hover = live && pointer.active ? hitAt(pointer.x, pointer.y) : undefined;
       canvas.style.cursor = hover ? "pointer" : "";
 
       const lines: string[][] = TIERS.map(() => new Array<string>(rows));
       const rowBuf: string[][] = TIERS.map(() => new Array<string>(cols));
       const blendAt = (x: number, y: number) => {
-        if (!pointer.active) return 0;
-        const dx = (x + 0.5) * cw - pointer.x;
-        const dy = (y + 0.5) * ch - pointer.y;
-        const d = Math.sqrt(dx * dx + dy * dy);
-        return d < BLEND_RADIUS ? Math.pow(1 - d / BLEND_RADIUS, 1.4) : 0;
+        if (!live) return 0;
+        let b = 0;
+        if (pointer.active) {
+          const dx = (x + 0.5) * cw - pointer.x;
+          const dy = (y + 0.5) * ch - pointer.y;
+          const d = Math.sqrt(dx * dx + dy * dy);
+          if (d < BLEND_RADIUS) b = Math.pow(1 - d / BLEND_RADIUS, 1.4);
+        }
+        // Click ripples dissolve the text as the wave passes over it.
+        const wave = rippleAt((x + 0.5) * cw, (y + 0.5) * ch, t);
+        return Math.min(1, Math.max(b, wave * 0.9));
       };
 
       for (let y = 0; y < rows; y++) {
@@ -249,14 +279,13 @@ export default function AsciiIntro({ links }: { links: Link[] }) {
 
           if (nx > sweep) {
             // Not reached by the sweep yet: blank.
-          } else if (sweep - nx < SLAB_WIDTH && t < SWEEP_END + 0.3) {
-            // Scramble slab: solid, so the name stays hidden behind it.
+          } else if (sweep - nx < SLAB_WIDTH && t < P1_END + 0.3) {
             glyph = SCRAMBLE[Math.floor(hash(x, y, tick) * SCRAMBLE.length)];
             tier = 3;
-          } else if (halo[y * cols + x] * nameAmt > 0.5) {
-            // Quiet zone around text.
           } else {
-            const idx = Math.floor(fieldValue(x, y, t, baseGain) * (RAMP.length - 1));
+            // The field fades out behind text only once it starts decoding.
+            const gain = baseGain * (1 - halo[y * cols + x] * decode);
+            const idx = Math.floor(fieldValue(x, y, t, gain) * (RAMP.length - 1));
             glyph = RAMP[idx];
             tier = idx < 3 ? 0 : idx < 5 ? 1 : idx < 7 ? 2 : 3;
           }
@@ -273,51 +302,61 @@ export default function AsciiIntro({ links }: { links: Link[] }) {
         for (let y = 0; y < rows; y++) ctx.fillText(lines[k][y], 0, y * ch);
       }
 
-      // Foreground text, drawn per cell so it can blend into the field.
-      const drawCell = (x: number, y: number, glyph: string, kind: Kind, linkIdx: number) => {
+      // Foreground text, drawn per cell so it can scramble in and blend out.
+      const drawCell = (
+        x: number,
+        y: number,
+        glyph: string,
+        kind: Kind,
+        linkIdx: number,
+        scrambling: boolean,
+      ) => {
         const isHover = hover !== undefined && hover.link === linkIdx && kind === 2;
         const b = blendAt(x, y) * (isHover ? 0.25 : 1);
         if (b > 0 && hash(x, y, tick) < b * 0.9) {
           const idx = Math.max(1, Math.floor(fieldValue(x, y, t, 0.5) * (RAMP.length - 1)));
           glyph = RAMP[idx];
         }
-        const step = Math.round(b * STEPS);
+        const step = scrambling ? 3 : Math.round(b * STEPS);
         ctx.fillStyle = isHover ? hoverColors[step] : colors[kind][step];
         ctx.fillText(glyph, x * cw, y * ch);
       };
 
-      if (nameAmt > 0) {
+      // Phase 2: every cell decodes on its own delay, sweeping left to right.
+      const decodeQ = (x: number, y: number) =>
+        (t - P2_START - ((x / cols) * 0.35 + hash(x, y, 7) * 0.55)) / SCRAMBLE_LIFE;
+      const scrambled = (x: number, y: number) =>
+        SCRAMBLE[Math.floor(hash(x, y, tick + 11) * SCRAMBLE.length)];
+
+      if (t >= P2_START) {
         ctx.font = `800 ${fontSize}px ${family}`;
         for (let y = 0; y < rows; y++) {
           for (let x = 0; x < cols; x++) {
-            const m = mask[y * cols + x] * nameAmt;
-            if (m <= 0.35) continue;
-            if (x / cols > revealEdge) continue;
-            drawCell(x, y, "@#%8&"[(x * 7 + y * 3 + Math.floor(t * 4)) % 5], 0, -1);
+            if (mask[y * cols + x] <= 0.35) continue;
+            const q = decodeQ(x, y);
+            if (q < 0) continue;
+            if (q < 1) drawCell(x, y, scrambled(x, y), 0, -1, true);
+            else drawCell(x, y, "@#%8&"[(x * 7 + y * 3 + Math.floor(t * 4)) % 5], 0, -1, false);
           }
         }
-      }
 
-      if (textAmt > 0) {
         ctx.font = `600 ${fontSize}px ${family}`;
         for (const c of textCells) {
-          const th = (c.x / cols) * 0.5;
-          if (textAmt <= th || c.x / cols > revealEdge) continue;
-          const glyph =
-            textAmt - th < 0.12
-              ? SCRAMBLE[Math.floor(hash(c.x, c.y, tick) * SCRAMBLE.length)]
-              : c.ch;
-          drawCell(c.x, c.y, glyph, c.kind, c.link);
+          const q = decodeQ(c.x, c.y);
+          if (q < 0) continue;
+          if (q < 1) drawCell(c.x, c.y, scrambled(c.x, c.y), c.kind, c.link, true);
+          else drawCell(c.x, c.y, c.ch, c.kind, c.link, false);
         }
       }
 
       // Loading counter.
-      if (t < LOADING_OUT_END) {
-        const pct = Math.round(clamp(t / SWEEP_END) * 100);
-        const alpha = 1 - smooth(LOADING_OUT_START, LOADING_OUT_END, t);
+      if (t < P2_START + 1) {
+        const pct = Math.round(clamp(t / P1_END) * 100);
+        const alpha = 1 - smooth(P2_START, P2_START + 1, t);
+        const label = t < P2_START ? "LOADING" : "DECODING";
         ctx.font = `${fontSize + 2}px ${family}`;
         ctx.fillStyle = `rgba(214, 226, 255, ${0.9 * alpha})`;
-        ctx.fillText(`LOADING ${String(pct).padStart(3, "0")}%`, 20, h - 36);
+        ctx.fillText(`${label} ${String(pct).padStart(3, "0")}%`, 20, h - 36);
       }
 
       if (!reduced) raf = requestAnimationFrame(frame);
@@ -334,8 +373,13 @@ export default function AsciiIntro({ links }: { links: Link[] }) {
       pointer.active = false;
     };
     const onClick = (e: MouseEvent) => {
+      if (!live) return;
       const r = canvas.getBoundingClientRect();
-      const hit = hitAt(e.clientX - r.left, e.clientY - r.top);
+      const x = e.clientX - r.left;
+      const y = e.clientY - r.top;
+      if (ripples.length >= 4) ripples.shift();
+      ripples.push({ x, y, t0: (performance.now() - start) / 1000 });
+      const hit = hitAt(x, y);
       if (!hit) return;
       const link = links[hit.link];
       if (link.href.startsWith("mailto:")) window.location.href = link.href;
