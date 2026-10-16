@@ -24,6 +24,7 @@ const BLEND_RADIUS = 170;
 const TAGLINE = "SOFTWARE ENGINEER & FOUNDER";
 const SUBLINE = "QA ENGINEER AT NOSCAI. FOUNDER OF SHIRO LABS.";
 
+const SLAB_WIDTH = 0.12; // width of the scramble slab, as a fraction of the grid
 const SWEEP_END = 2.2; // seconds until the scramble has settled everywhere
 const MASK_IN = 0.7;
 const TEXT_IN = 1.6;
@@ -220,6 +221,8 @@ export default function AsciiIntro({ links }: { links: Link[] }) {
       ctx.textBaseline = "top";
 
       const sweep = clamp(t / SWEEP_END) * 1.25;
+      // Text is revealed only once the slab has passed over it.
+      const revealEdge = t < SWEEP_END + 0.3 ? sweep - SLAB_WIDTH : Infinity;
       const nameAmt = smooth(0.4, MASK_IN + 0.8, t);
       const textAmt = smooth(TEXT_IN, TEXT_IN + 1, t);
       const settled = smooth(LOADING_OUT_START, LOADING_OUT_END + 0.4, t);
@@ -246,11 +249,12 @@ export default function AsciiIntro({ links }: { links: Link[] }) {
 
           if (nx > sweep) {
             // Not reached by the sweep yet: blank.
-          } else if (halo[y * cols + x] * nameAmt > 0.5) {
-            // Quiet zone around text.
-          } else if (sweep - nx < 0.12 && t < SWEEP_END + 0.3) {
+          } else if (sweep - nx < SLAB_WIDTH && t < SWEEP_END + 0.3) {
+            // Scramble slab: solid, so the name stays hidden behind it.
             glyph = SCRAMBLE[Math.floor(hash(x, y, tick) * SCRAMBLE.length)];
             tier = 3;
+          } else if (halo[y * cols + x] * nameAmt > 0.5) {
+            // Quiet zone around text.
           } else {
             const idx = Math.floor(fieldValue(x, y, t, baseGain) * (RAMP.length - 1));
             glyph = RAMP[idx];
@@ -288,7 +292,7 @@ export default function AsciiIntro({ links }: { links: Link[] }) {
           for (let x = 0; x < cols; x++) {
             const m = mask[y * cols + x] * nameAmt;
             if (m <= 0.35) continue;
-            if (x / cols > sweep) continue;
+            if (x / cols > revealEdge) continue;
             drawCell(x, y, "@#%8&"[(x * 7 + y * 3 + Math.floor(t * 4)) % 5], 0, -1);
           }
         }
@@ -298,7 +302,7 @@ export default function AsciiIntro({ links }: { links: Link[] }) {
         ctx.font = `600 ${fontSize}px ${family}`;
         for (const c of textCells) {
           const th = (c.x / cols) * 0.5;
-          if (textAmt <= th) continue;
+          if (textAmt <= th || c.x / cols > revealEdge) continue;
           const glyph =
             textAmt - th < 0.12
               ? SCRAMBLE[Math.floor(hash(c.x, c.y, tick) * SCRAMBLE.length)]
