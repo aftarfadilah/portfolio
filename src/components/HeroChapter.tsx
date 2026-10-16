@@ -3,6 +3,7 @@
 import { motion } from "framer-motion";
 import { socialLinks } from "@/data/content";
 import TypedText from "@/components/TypedText";
+import AsciiIntro, { ASCII_INTRO_DURATION } from "@/components/AsciiIntro";
 
 const SOCIAL_ICONS: Record<string, React.ReactNode> = {
   github: (
@@ -45,11 +46,13 @@ const SOCIAL_ICONS: Record<string, React.ReactNode> = {
   ),
 };
 
+const INTRO = ASCII_INTRO_DURATION - 0.6;
+
 function fadeIn(delay: number) {
   return {
     initial: { opacity: 0, y: 20 },
     animate: { opacity: 1, y: 0 },
-    transition: { duration: 0.6, delay },
+    transition: { duration: 0.6, delay: delay + INTRO },
   };
 }
 
@@ -60,25 +63,16 @@ export default function HeroChapter() {
       className="relative flex min-h-[calc(100vh-6rem)] items-center justify-center overflow-hidden bg-background"
       style={{ scrollMarginTop: "6.5rem" }}
     >
-      {/* Grid pattern background */}
-      <div
-        className="pointer-events-none absolute inset-0"
-        aria-hidden="true"
-        style={{
-          backgroundImage: `linear-gradient(rgba(59, 105, 204, 0.03) 1px, transparent 1px),
-            linear-gradient(90deg, rgba(59, 105, 204, 0.03) 1px, transparent 1px)`,
-          backgroundSize: "60px 60px",
-        }}
-      />
+      {/* Fullscreen ASCII field + loading intro */}
+      <AsciiIntro />
 
-      {/* Radial gradient glow orb */}
+      {/* Soft vignette keeps the text readable over the field */}
       <div
         className="pointer-events-none absolute inset-0"
         aria-hidden="true"
         style={{
           background:
-            "radial-gradient(500px circle at 50% 0%, rgba(59, 105, 204, 0.15), transparent 70%)",
-          filter: "blur(120px)",
+            "radial-gradient(ellipse 55% 45% at 50% 50%, rgba(11, 12, 22, 0.78), transparent 80%)",
         }}
       />
 
@@ -92,7 +86,7 @@ export default function HeroChapter() {
         </motion.p>
 
         <h1 className="mt-6 text-7xl font-bold tracking-tight text-foreground md:text-8xl">
-          <TypedText text="Aftar Fadilah" delay={0.3} speed={55} />
+          <TypedText text="Aftar Fadilah" delay={0.3 + INTRO} speed={55} />
         </h1>
 
         <motion.p
