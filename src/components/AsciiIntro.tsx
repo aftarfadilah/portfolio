@@ -41,6 +41,7 @@ const WATER_DAMP = 0.9962; // per step; ripples fade over ~2s
 // Beach: the bottom of the hero is empty sand. Every so often the sea rushes
 // in over it, takes over the bottom of the hero, then drains back out.
 const SHORE = 0.84; // resting waterline as a fraction of the height
+const TIDE_MAX = 0.93; // the sea never reaches the bottom edge: land is always left
 const TIDE_PERIOD = 11; // seconds per wave cycle
 const TIDE_RUSH = 2.6; // sea running up the sand
 const TIDE_HOLD = 0.9; // sea at its highest
@@ -296,13 +297,13 @@ export default function AsciiIntro({ links }: { links: Link[] }) {
 
     const updateTide = (t: number, dt: number) => {
       const rest = rows * SHORE;
-      const peak = rows + 1.5;
+      const peak = rows * TIDE_MAX;
       for (let x = 0; x < cols; x++) {
         // The wave arrives a touch earlier in some places so the front is slanted.
         const lag = 0.55 * (0.5 + 0.5 * Math.sin(x * 0.011 + 0.6)) + 0.18 * Math.sin(x * 0.043);
         const { lv, moving } = tideLevel(t - P2_END - lag);
         const jag = (0.5 + 0.9 * moving) * Math.sin(x * 0.07 + t * 1.3) + 0.4 * Math.sin(x * 0.19 - t * 2);
-        const w = rest + (peak - rest) * lv + jag * (lv > 0.01 ? 1 : 0.3);
+        const w = Math.min(peak, rest + (peak - rest) * lv + jag * (lv > 0.01 ? 1 : 0.3));
         shoreCol[x] = w;
         activeCol[x] = moving;
         wetCol[x] = Math.max(w, wetCol[x] - 0.55 * dt);
@@ -384,7 +385,8 @@ export default function AsciiIntro({ links }: { links: Link[] }) {
               // Sand: empty, apart from a damp sheen where the sea just was.
               const wet = wetCol[x] > y ? Math.exp(-(y - shore) / 5) : 0;
               const r = hash(x, y, 3);
-              if (r < 0.04 + 0.22 * wet) {
+              const toEdge = clamp((rows - 1 - y) / 4); // sand dissolves into nothing at the edge
+              if (r < (0.04 + 0.22 * wet) * toEdge) {
                 glyph = r < 0.03 ? "." : ":";
                 tier = wet > 0.5 ? 1 : 0;
               }
