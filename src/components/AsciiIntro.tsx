@@ -1,7 +1,6 @@
 "use client";
 
 import { useEffect, useRef } from "react";
-import { SYMBOLS } from "@/components/FloatingCode";
 
 const RAMP = " .:-=+*#%@";
 const SCRAMBLE = "01<>/\\{}[]()=+*#%@$&?!;:";
@@ -20,7 +19,6 @@ const LINK_RGBA = [120, 160, 245, 0.95];
 const HOVER_RGBA = [255, 255, 255, 1];
 const BLEND_TO = [96, 140, 235, 0.55];
 const STEPS = 8;
-const FLOATERS = 16;
 const BLEND_RADIUS = 170;
 
 const TAGLINE = "SOFTWARE ENGINEER & FOUNDER";
@@ -36,16 +34,6 @@ export const ASCII_INTRO_DURATION = LOADING_OUT_END;
 type Link = { label: string; href: string };
 type Kind = 0 | 1 | 2; // name | body | link
 type TextCell = { x: number; y: number; ch: string; kind: Kind; link: number };
-type Floater = {
-  x: number; // px
-  y: number; // px
-  vx: number; // px / s
-  vy: number; // px / s
-  scale: number;
-  alpha: number;
-  swapAt: number;
-  term: string;
-};
 type Hit = { x0: number; x1: number; y0: number; y1: number; link: number };
 
 function clamp(v: number, lo = 0, hi = 1) {
@@ -99,7 +87,6 @@ export default function AsciiIntro({ links }: { links: Link[] }) {
     let halo = new Float32Array(0);
     let textCells: TextCell[] = [];
     let hits: Hit[] = [];
-    let floaters: Floater[] = [];
     let raf = 0;
     let disposed = false;
     const start = performance.now();
@@ -201,21 +188,6 @@ export default function AsciiIntro({ links }: { links: Link[] }) {
       cols = Math.ceil(w / cw) + 1;
       rows = Math.ceil(h / ch) + 1;
       buildLayout();
-      const rnd = (a: number, b: number) => Math.random() * (b - a) + a;
-      const term = () => SYMBOLS[Math.floor(Math.random() * SYMBOLS.length)];
-      floaters = Array.from({ length: FLOATERS }, () => {
-        const depth = Math.random();
-        return {
-          x: rnd(0, w),
-          y: rnd(0, h),
-          vx: rnd(-6, 6) * (0.4 + depth),
-          vy: rnd(-14, -3) * (0.4 + depth),
-          scale: 0.9 + depth * 1.1,
-          alpha: 0.1 + depth * 0.22,
-          swapAt: rnd(0.5, 2.5),
-          term: term(),
-        };
-      });
     };
 
     const fieldValue = (x: number, y: number, t: number, gain: number) => {
@@ -295,33 +267,6 @@ export default function AsciiIntro({ links }: { links: Link[] }) {
       for (let k = 0; k < TIERS.length; k++) {
         ctx.fillStyle = TIERS[k];
         for (let y = 0; y < rows; y++) ctx.fillText(lines[k][y], 0, y * ch);
-      }
-
-      // Floating programming terms drifting through the field.
-      if (t > 1) {
-        const fade = smooth(1, 2, t);
-        ctx.textBaseline = "alphabetic";
-        for (const f of floaters) {
-          if (!reduced) {
-            f.x += f.vx / 60;
-            f.y += f.vy / 60;
-          }
-          if (t > f.swapAt) {
-            f.term = SYMBOLS[Math.floor(Math.random() * SYMBOLS.length)];
-            f.swapAt = t + 0.6 + Math.random() * 1.8;
-          }
-          if (f.y < -40) f.y = h + 20;
-          if (f.y > h + 40) f.y = -20;
-          if (f.x < -80) f.x = w + 20;
-          if (f.x > w + 20) f.x = -60;
-          const cx = Math.floor(f.x / cw);
-          const cy = Math.floor(f.y / ch);
-          if (halo[cy * cols + cx] > 0 && nameAmt > 0.5) continue;
-          ctx.font = `${fontSize * f.scale}px ${family}`;
-          ctx.fillStyle = `rgba(150, 180, 240, ${(f.alpha * fade).toFixed(3)})`;
-          ctx.fillText(f.term, f.x, f.y);
-        }
-        ctx.textBaseline = "top";
       }
 
       // Foreground text, drawn per cell so it can blend into the field.
