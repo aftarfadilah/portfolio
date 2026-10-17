@@ -45,7 +45,7 @@ export default function KanagawaPage() {
         <h1 className="text-sm font-semibold tracking-widest text-[#DCD7BA]">
           神奈川沖浪裏 <span className="text-[#E6C384]">KANAGAWA</span>
         </h1>
-        <p>The Great Wave, drawn in ASCII · move to light the lantern · click to ripple</p>
+        <p>Hokusai, c. 1831 (public domain) · move to light the lantern · click to ripple</p>
       </footer>
     </main>
   );

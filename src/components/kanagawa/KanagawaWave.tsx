@@ -2,73 +2,88 @@
 
 import { useEffect, useRef } from "react";
 
+/**
+ * The Great Wave off Kanagawa as dense, coloured, animated ASCII.
+ *
+ * The print is sampled into a fine glyph grid. Each cell is a 4x8 patch of
+ * pixels; the glyph whose ink pattern best matches that patch is chosen
+ * (shape matching, not just a brightness ramp), and the cell is coloured with
+ * the nearest colour of the Kanagawa palette. At runtime the grid is drawn
+ * from a pre-rendered glyph atlas while the water flows, the foam glitters,
+ * the pointer acts as a magnifying lantern and clicks send ripples.
+ */
+
+const SRC = "/kanagawa/great-wave.webp";
+const BX = 4; // sample bins per cell, horizontally
+const BY = 8; // ... and vertically
+const NB = BX * BY;
+const LEVELS = 6;
+
 // Kanagawa (wave) palette, as used by kanagawa.nvim.
-const STEPS = 6;
-const COLORS: string[] = [];
+const BG = [0x1f, 0x1f, 0x28];
+const BASE = [
+  "#dcd7ba", // fujiWhite
+  "#c8c093", // oldWhite
+  "#a3d4d5", // lightBlue
+  "#7fb4ca", // springBlue
+  "#7e9cd8", // crystalBlue
+  "#9cabca", // springViolet2
+  "#938aa9", // springViolet1
+  "#957fb8", // oniViolet
+  "#658594", // dragonBlue
+  "#6a9589", // waveAqua1
+  "#2d4f67", // waveBlue2
+  "#223249", // waveBlue1
+  "#e6c384", // carpYellow
+  "#c0a36e", // boatYellow
+  "#d27e99", // sakuraPink
+  "#e46876", // waveRed
+  "#c34043", // autumnRed
+  "#98bb6c", // springGreen
+  "#717c7c", // katanaGray
+  "#54546d", // sumiInk6
+];
+const H_CARP = BASE.indexOf("#e6c384");
+const H_FOAM = BASE.indexOf("#dcd7ba");
 
-function hex(h: string) {
-  return [1, 3, 5].map((i) => parseInt(h.slice(i, i + 2), 16));
+// No bare horizontal bars (- _ =): matched row after row they read as scanlines.
+const GLYPHS =
+  " .'`:;+*!|/\\()<>[]{}ilIrtcxzvunoeaswmOZ0&%#8$@BWMXKNH?7";
+const gl = (c: string) => GLYPHS.indexOf(c);
+// Glyphs without a strong stroke direction: used for flat tones, ordered by ink.
+const RAMP_SET = Array.from(".'`:;,+*xozvc?rsea%&#8$@XKNMWB", gl);
+const SPARK = Array.from("*+`'", gl);
+const SCRAMBLE_FROM = 12; // glyphs from here on are the busy ones
+
+const rgbOf = (h: string) => [1, 3, 5].map((i) => parseInt(h.slice(i, i + 2), 16));
+
+function toLab(r: number, g: number, b: number): [number, number, number] {
+  const f = (c: number) => {
+    c /= 255;
+    return c > 0.04045 ? Math.pow((c + 0.055) / 1.055, 2.4) : c / 12.92;
+  };
+  const R = f(r);
+  const G = f(g);
+  const B = f(b);
+  const q = (t: number) => (t > 0.008856 ? Math.cbrt(t) : 7.787 * t + 16 / 116);
+  const x = q((0.4124 * R + 0.3576 * G + 0.1805 * B) / 0.95047);
+  const y = q(0.2126 * R + 0.7152 * G + 0.0722 * B);
+  const z = q((0.0193 * R + 0.1192 * G + 0.9505 * B) / 1.08883);
+  return [116 * y - 16, 500 * (x - y), 200 * (y - z)];
 }
 
-/** Registers a STEPS-long colour ramp and returns the index of its first colour. */
-function ramp(from: string, to: string) {
-  const base = COLORS.length;
-  const a = hex(from);
-  const b = hex(to);
-  for (let i = 0; i < STEPS; i++) {
-    const k = i / (STEPS - 1);
-    const c = (j: number) => Math.round(a[j] + (b[j] - a[j]) * k);
-    COLORS.push(`rgb(${c(0)}, ${c(1)}, ${c(2)})`);
+// Palette: every base colour at LEVELS brightnesses, blended towards the background.
+const PAL_RGB: number[] = [];
+const PAL_LAB: [number, number, number][] = [];
+BASE.forEach((hex) => {
+  const c = rgbOf(hex);
+  for (let l = 0; l < LEVELS; l++) {
+    const f = 0.55 + (0.55 * l) / (LEVELS - 1);
+    const m = c.map((v, i) => Math.min(255, Math.round(v * f + BG[i] * Math.max(0, 1 - f))));
+    PAL_RGB.push(m[0], m[1], m[2]);
+    PAL_LAB.push(toLab(m[0], m[1], m[2]));
   }
-  return base;
-}
-
-const R_CLOUD = ramp("#2a2a37", "#54546d"); // sumiInk4 -> sumiInk6
-const R_STAR = ramp("#54546d", "#dcd7ba"); // -> fujiWhite
-const R_SEA_FAR = ramp("#223249", "#2d4f67"); // waveBlue1 -> waveBlue2
-const R_SEA = ramp("#2d4f67", "#7fb4ca"); // waveBlue2 -> springBlue
-const R_BODY = ramp("#2d4f67", "#7e9cd8"); // waveBlue2 -> crystalBlue
-const R_FOAM = ramp("#a3d4d5", "#dcd7ba"); // lightBlue -> fujiWhite
-const R_FUJI = ramp("#54546d", "#957fb8"); // sumiInk6 -> oniViolet
-const R_SNOW = ramp("#7fb4ca", "#dcd7ba"); // springBlue -> fujiWhite
-const R_SUN = ramp("#c34043", "#e6c384"); // autumnRed -> carpYellow
-const R_PETAL = ramp("#d27e99", "#e46876"); // sakuraPink -> waveRed
-const R_GLOW = ramp("#6b5e3a", "#e6c384"); // dim lantern -> carpYellow
-const R_BOAT = ramp("#a08a5b", "#e6c384");
-
-const GL = " .,:;'`^-=~+*oO#%@8&/\\|()<>01";
-const g = (c: string) => GL.indexOf(c);
-const SCRAMBLE = Array.from("01<>/\\()=+*#%@&8", g);
-const FOAM = Array.from("*+'`.*", g);
-const PETALS = Array.from("*~,'", g);
-const G_DOT = g(".");
-const G_COLON = g(":");
-const G_DASH = g("-");
-const G_EQ = g("=");
-const G_TILDE = g("~");
-const G_CARET = g("^");
-const G_SLASH = g("/");
-const G_BACK = g("\\");
-const G_LT = g("<");
-const G_GT = g(">");
-const G_O = g("o");
-const G_STAR = g("*");
-const SUN_GLYPHS = Array.from("*+#%@", g);
-
-// Scene, in "height units" (1 = scene height). The wave curls over Mt. Fuji.
-const OX = 0.86; // x of the wave's crest
-const PEAK = 0.22; // y of the crest
-const SEA = 0.66; // y of the trough
-const HORIZON = 0.6;
-const XF = OX + 0.18; // Fuji
-const KX = OX + 0.12; // centre of the curl
-const KY = 0.4;
-const KR = 0.18;
-const KT = 0.055; // curl thickness
-const ARC_END = Math.PI + 0.55;
-const SUN = { x: 0.3, y: 0.17, r: 0.075 };
-
-const INTRO = 2.4;
+});
 
 function clamp(v: number, lo = 0, hi = 1) {
   return Math.min(hi, Math.max(lo, v));
@@ -79,313 +94,472 @@ function smooth(a: number, b: number, v: number) {
   return t * t * (3 - 2 * t);
 }
 
+/** Separable box blur, used for a local-contrast (unsharp mask) pass. */
+function boxBlur(src: Float32Array, w: number, h: number, r: number) {
+  const tmp = new Float32Array(src.length);
+  const out = new Float32Array(src.length);
+  const n = 2 * r + 1;
+  for (let y = 0; y < h; y++) {
+    const row = y * w;
+    let acc = 0;
+    for (let x = -r; x <= r; x++) acc += src[row + Math.min(w - 1, Math.max(0, x))];
+    for (let x = 0; x < w; x++) {
+      tmp[row + x] = acc / n;
+      acc += src[row + Math.min(w - 1, x + r + 1)] - src[row + Math.max(0, x - r)];
+    }
+  }
+  for (let x = 0; x < w; x++) {
+    let acc = 0;
+    for (let y = -r; y <= r; y++) acc += tmp[Math.min(h - 1, Math.max(0, y)) * w + x];
+    for (let y = 0; y < h; y++) {
+      out[y * w + x] = acc / n;
+      acc += tmp[Math.min(h - 1, y + r + 1) * w + x] - tmp[Math.max(0, y - r) * w + x];
+    }
+  }
+  return out;
+}
+
 function hash(x: number, y: number, k: number) {
   const r = Math.sin((x * 12.9898 + y * 78.233 + k * 37.719) * 43758.5453);
   return r - Math.floor(r);
 }
 
-const step = (base: number, v: number) => base + Math.round(clamp(v) * (STEPS - 1));
+
+const INTRO = 2.6;
+const LENS = 15; // lantern radius, in (square) cells
+const NG = GLYPHS.length;
+const NC = PAL_RGB.length / 3;
 
 type Ripple = { x: number; y: number; t0: number };
 
-/**
- * Fullscreen, animated, coloured ASCII rendition of The Great Wave off
- * Kanagawa in the Kanagawa colour theme. Every cell is sampled from a
- * procedural scene (sky, sun, Fuji, curling wave, sea, boats) and drawn from
- * a pre-rendered glyph atlas, so a full-screen field stays cheap per frame.
- */
+const VERT = `
+attribute vec2 aPos;
+void main() { gl_Position = vec4(aPos, 0.0, 1.0); }
+`;
+
+// Everything that moves lives here: the grid itself is static data.
+const FRAG = `
+#ifdef GL_FRAGMENT_PRECISION_HIGH
+precision highp float;
+#else
+precision mediump float;
+#endif
+uniform vec2 uRes, uCell, uGrid, uVis, uView, uPtr;
+uniform float uTime, uSweep, uSlab, uActive;
+uniform vec4 uSpark;
+uniform vec3 uRip[4];
+uniform sampler2D uData, uAtlas, uPal;
+
+const float LEVELS = ${LEVELS}.0;
+const float LENS = ${LENS}.0;
+const float NG = ${NG}.0;
+const float NC = ${NC}.0;
+const float H_FOAM = ${H_FOAM}.0;
+const float H_CARP = ${H_CARP}.0;
+const float BUSY = ${SCRAMBLE_FROM}.0;
+
+float hash(vec2 p, float k) {
+  return fract(sin(dot(p + k * vec2(1.7, 9.2), vec2(12.9898, 78.233))) * 43758.5453);
+}
+
+vec4 cellAt(vec2 s) {
+  s = clamp(floor(s + 0.5), vec2(0.0), uGrid - 1.0);
+  return floor(texture2D(uData, (s + 0.5) / uGrid) * 255.0 + 0.5);
+}
+
+void main() {
+  vec2 frag = vec2(gl_FragCoord.x, uRes.y - gl_FragCoord.y);
+  vec2 cf = frag / uCell;
+  vec2 c = floor(cf);
+  vec2 loc = cf - c;
+  float nx = c.x / uVis.x;
+  if (c.x >= uVis.x || c.y >= uVis.y || nx > uSweep) { gl_FragColor = vec4(0.0); return; }
+  float t = uTime;
+  float g;
+  float hue;
+  float lev;
+
+  if (uSweep - nx < 0.06 && uSlab > 0.5) {
+    // The loading sweep: a slab of scrambled glyphs ahead of the picture.
+    g = BUSY + floor(hash(c, floor(t * 12.0)) * (NG - BUSY));
+    hue = H_FOAM;
+    lev = LEVELS - 1.0;
+  } else {
+    vec2 s = c + uView;
+    float glow = 0.0;
+
+    // Lantern: a magnifying lens around the pointer.
+    if (uActive > 0.5) {
+      vec2 d = c - uPtr;
+      float len = length(vec2(d.x, d.y * 2.0));
+      if (len < LENS) {
+        float k = len / LENS;
+        s = uView + uPtr + d * (0.55 + 0.45 * k * k);
+        glow = 1.0 - k;
+      }
+    }
+
+    // Ripples push the picture outwards.
+    for (int i = 0; i < 4; i++) {
+      float age = t - uRip[i].z;
+      if (age >= 0.0 && age < 2.4) {
+        vec2 d = c - uRip[i].xy;
+        d.y *= 2.0;
+        float len = max(length(d), 1.0);
+        float r = (len - age * 26.0) / 3.0;
+        float w = exp(-r * r) * sin(len * 0.9 - age * 12.0) * (1.0 - age / 2.4);
+        s += vec2(d.x / len, d.y / len * 0.5) * w * 3.0;
+      }
+    }
+
+    // Water and foam flow: small, smooth shifts of where each cell reads from.
+    vec4 d0 = cellAt(s);
+    if (d0.a > 100.5) {
+      float a = d0.a < 101.5 ? 1.5 : 1.0;
+      s += floor(vec2(a * sin(s.y * 0.27 + t * 1.3 + s.x * 0.03), 0.7 * a * sin(s.x * 0.11 - t * 0.9)) + 0.5);
+    }
+
+    vec4 d = cellAt(s);
+    float kind = d.a - 100.0;
+    g = d.r;
+    if (g < 0.5) { gl_FragColor = vec4(0.0); return; }
+    hue = d.g;
+    lev = d.b;
+    vec2 sc = floor(s + 0.5);
+
+    if (kind < 0.5) {
+      lev += floor(0.9 * sin(sc.x * 0.03 + sc.y * 0.06 - t * 0.25) + 0.5);
+    } else if (kind < 1.5) {
+      lev += floor(1.4 * sin(sc.x * 0.1 - sc.y * 0.45 + t * 2.0) + 0.5);
+    } else {
+      lev += floor(0.8 * sin(sc.x * 0.13 + sc.y * 0.3 - t * 1.6) + 0.5);
+      if (hash(sc, floor(t * 7.0)) < 0.035) {
+        float pick = floor(hash(sc.yx, 3.0) * 4.0);
+        g = pick < 1.0 ? uSpark.x : pick < 2.0 ? uSpark.y : pick < 3.0 ? uSpark.z : uSpark.w;
+        lev = LEVELS;
+      }
+    }
+    if (glow > 0.0) {
+      lev += floor(glow * 2.2 + 0.5);
+      if (glow > 0.5) hue = H_CARP;
+    }
+    lev = clamp(lev, 0.0, LEVELS - 1.0);
+  }
+
+  float cov = texture2D(uAtlas, vec2((g + loc.x) / NG, loc.y)).a;
+  vec3 col = texture2D(uPal, vec2((hue * LEVELS + lev + 0.5) / NC, 0.5)).rgb;
+  gl_FragColor = vec4(col * cov, cov);
+}
+`;
+
 export default function KanagawaWave() {
   const canvasRef = useRef<HTMLCanvasElement>(null);
 
   useEffect(() => {
     const canvas = canvasRef.current;
-    const ctx = canvas?.getContext("2d");
-    if (!canvas || !ctx) return;
+    const gl = canvas?.getContext("webgl", { antialias: false, alpha: true, premultipliedAlpha: true });
+    if (!canvas || !gl) return;
 
     const reduced = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
-    const pointer = { x: -1, y: -1, active: false, sx: 0 };
+    const pointer = { x: 0, y: 0, active: false };
+    const pan = { x: 0.42, y: 0.25 };
     const ripples: Ripple[] = [];
-    let atlas: HTMLCanvasElement | null = null;
-    let dpr = 1;
-    let W = 0;
-    let H = 0;
-    let cw = 7;
-    let ch = 17;
-    let cols = 0;
-    let rows = 0;
+    const img = new Image();
+    let ready = false;
     let family = "monospace";
-    let fontSize = 12;
+    let dpr = 1;
+    let Wd = 0; // canvas size in device pixels
+    let Hd = 0;
+    let cw = 8; // cell size in device pixels
+    let ch = 16;
+    let gc = 0; // grid size (whole picture, in cells)
+    let gr = 0;
+    let vc = 0; // visible size
+    let vr = 0;
     let raf = 0;
     let disposed = false;
+    let rebuild = 0;
     const start = performance.now();
 
-    // Per-cell result of resolve(): glyph index (0 = blank) and colour index.
-    let rg = 0;
-    let rc = 0;
+    const compile = (type: number, src: string) => {
+      const sh = gl.createShader(type)!;
+      gl.shaderSource(sh, src);
+      gl.compileShader(sh);
+      return sh;
+    };
+    const prog = gl.createProgram()!;
+    gl.attachShader(prog, compile(gl.VERTEX_SHADER, VERT));
+    gl.attachShader(prog, compile(gl.FRAGMENT_SHADER, FRAG));
+    gl.linkProgram(prog);
+    if (!gl.getProgramParameter(prog, gl.LINK_STATUS)) {
+      console.error(gl.getProgramInfoLog(prog));
+      return;
+    }
+    gl.useProgram(prog);
+    const quad = gl.createBuffer();
+    gl.bindBuffer(gl.ARRAY_BUFFER, quad);
+    gl.bufferData(gl.ARRAY_BUFFER, new Float32Array([-1, -1, 3, -1, -1, 3]), gl.STATIC_DRAW);
+    const aPos = gl.getAttribLocation(prog, "aPos");
+    gl.enableVertexAttribArray(aPos);
+    gl.vertexAttribPointer(aPos, 2, gl.FLOAT, false, 0, 0);
+    const U = (name: string) => gl.getUniformLocation(prog, name);
 
-    const putFoam = (x: number, y: number, t: number, lo = 0.4) => {
-      const h1 = hash(x, y, Math.floor(t * 4));
-      rg = FOAM[Math.floor(h1 * FOAM.length)];
-      rc = step(R_FOAM, lo + (1 - lo) * hash(y, x, 5));
+    const texture = (unit: number) => {
+      const tex = gl.createTexture();
+      gl.activeTexture(gl.TEXTURE0 + unit);
+      gl.bindTexture(gl.TEXTURE_2D, tex);
+      gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MIN_FILTER, gl.NEAREST);
+      gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MAG_FILTER, gl.NEAREST);
+      gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_S, gl.CLAMP_TO_EDGE);
+      gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_T, gl.CLAMP_TO_EDGE);
+      return tex;
+    };
+    const dataTex = texture(0);
+    const atlasTex = texture(1);
+    const palTex = texture(2);
+    gl.uniform1i(U("uData"), 0);
+    gl.uniform1i(U("uAtlas"), 1);
+    gl.uniform1i(U("uPal"), 2);
+    gl.pixelStorei(gl.UNPACK_ALIGNMENT, 1);
+    gl.activeTexture(gl.TEXTURE2);
+    gl.bindTexture(gl.TEXTURE_2D, palTex);
+    gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGB, NC, 1, 0, gl.RGB, gl.UNSIGNED_BYTE, new Uint8Array(PAL_RGB));
+    gl.uniform4f(U("uSpark"), SPARK[0], SPARK[1], SPARK[2], SPARK[3]);
+
+    /** Ink pattern of every glyph, as a BXxBY grid of coverage values. */
+    const glyphShapes = (fontSize: number) => {
+      const k = 4;
+      const c = document.createElement("canvas");
+      c.width = cw * k;
+      c.height = ch * k;
+      const g = c.getContext("2d", { willReadFrequently: true });
+      const out = new Float32Array(NG * NB);
+      if (!g) return out;
+      g.font = `600 ${fontSize * k}px ${family}`;
+      g.textAlign = "center";
+      g.textBaseline = "middle";
+      const bw = (cw * k) / BX;
+      const bh = (ch * k) / BY;
+      for (let i = 1; i < NG; i++) {
+        g.clearRect(0, 0, c.width, c.height);
+        g.fillStyle = "#fff";
+        g.fillText(GLYPHS[i], c.width / 2, c.height / 2 + k);
+        const d = g.getImageData(0, 0, c.width, c.height).data;
+        for (let by = 0; by < BY; by++) {
+          for (let bx = 0; bx < BX; bx++) {
+            let s = 0;
+            for (let y = 0; y < bh; y++) {
+              for (let x = 0; x < bw; x++) s += d[((by * bh + y) * c.width + bx * bw + x) * 4 + 3];
+            }
+            out[i * NB + by * BX + bx] = s / (bw * bh * 255);
+          }
+        }
+      }
+      return out;
     };
 
-    /** Sample the scene at one cell; (xs, ys) are scene coordinates. */
-    const resolve = (x: number, y: number, xs: number, ys: number, t: number) => {
-      rg = 0;
-      rc = 0;
-
-      const bob = Math.sin(t * 0.8) * 0.006;
-      const ky = KY + bob;
-      const kr = KR * (1 + 0.018 * Math.sin(t * 1.1));
-      const dx = xs - KX;
-      const dy = ys - ky;
-      const r = Math.hypot(dx, dy);
-      const s = Math.atan2(dy, dx) + Math.PI;
-      const tt = KT * (1 - 0.85 * smooth(ARC_END * 0.55, ARC_END, s));
-      const inArc = s <= ARC_END;
-      const hollow = r < kr - KT * 0.9 && ys < ky + kr * 0.6;
-
-      // Foam claws reaching off the tip of the curl.
-      if (s > ARC_END - 0.1 && s < ARC_END + 0.9 && r > kr - 0.05 && r < kr + 0.07) {
-        for (let j = 0; j < 5; j++) {
-          const a = 0.5 + j * 0.13 + 0.04 * Math.sin(t * 1.7 + j * 1.3);
-          const rr = kr - 0.012 + j * 0.008;
-          const fx = KX + Math.cos(a) * rr;
-          const fy = ky + Math.sin(a) * rr;
-          if (Math.hypot(xs - fx, ys - fy) < 0.016 - j * 0.0015) {
-            putFoam(x, y, t, 0.6);
-            return;
-          }
-        }
-      }
-
-      // The curl itself.
-      if (inArc && r <= kr && r >= kr - tt) {
-        const q = (kr - r) / tt; // 0 outer edge .. 1 inner edge
-        const tip = smooth(ARC_END - 0.5, ARC_END, s);
-        if (q < 0.2 || (tip > 0.2 && hash(x, y, Math.floor(t * 3)) < tip * 0.7)) {
-          putFoam(x, y, t);
-          return;
-        }
-        const st = Math.sin(r * 90 - t * 0.7 + s * 3) * 0.5 + 0.5;
-        rg = st > 0.7 ? G_EQ : st > 0.4 ? G_DASH : G_COLON;
-        rc = step(R_BODY, 0.4 + 0.5 * st - 0.2 * q);
-        return;
-      }
-
-      // The body of the wave, rising from the left to the crest.
-      const u = smooth(0, OX, xs);
-      const top = xs <= OX ? SEA - (SEA - PEAK) * Math.pow(u, 2.2) + bob : PEAK;
-      const wall = ys > ky ? OX - 0.01 + 0.07 * smooth(ky + 0.08, SEA, ys) : OX;
-      if (!hollow && ys >= top && xs <= wall && ys <= SEA + 0.05) {
-        const d = ys - top;
-        if (d < 0.012 + 0.008 * Math.sin(xs * 70 + t * 2)) {
-          putFoam(x, y, t, 0.3);
-          return;
-        }
-        const q = Math.sin(d * 70 + xs * 14 - t * 0.5 + Math.sin(xs * 20 + t * 0.4) * 0.8) * 0.5 + 0.5;
-        const depth = clamp(d / 0.35);
-        rg = q > 0.8 ? G_EQ : q > 0.55 ? G_DASH : q > 0.3 ? G_COLON : G_DOT;
-        rc = step(R_BODY, 0.35 + 0.65 * q * (1 - 0.4 * depth));
-        return;
-      }
-
-      // Spray thrown off the crest.
-      if (inArc && s > 0.3 && r > kr && r < kr + 0.06) {
-        const p = 0.35 * Math.exp(-(r - kr) / 0.02) * (0.5 + 0.5 * Math.sin(t * 2 + s * 5));
-        if (hash(x, y, Math.floor(t * 6)) < p) {
-          putFoam(x, y, t, 0.5);
-          return;
-        }
-      }
-      if (xs < OX && xs > OX - 0.4 && ys < top && ys > top - 0.05) {
-        const p = 0.12 * Math.exp((ys - top) / 0.02);
-        if (hash(x, y, Math.floor(t * 5)) < p) {
-          putFoam(x, y, t, 0.4);
-          return;
-        }
-      }
-
-      // Boats rowing in the trough.
-      for (let b = 0; b < 2; b++) {
-        const bx = XF + 0.02 + b * 0.16;
-        const by = 0.71 + b * 0.035 + Math.sin(t * 1.3 + bx * 10) * 0.004;
-        const hx = Math.abs(xs - bx);
-        if (hx < 0.045 && Math.abs(ys - by) < 0.009) {
-          rg = hx > 0.037 ? (xs < bx ? G_LT : G_GT) : G_EQ;
-          rc = step(R_BOAT, 0.8 - hx * 8);
-          return;
-        }
-        if (hx < 0.04 && ys > by + 0.009 && ys < by + 0.026) {
-          if (Math.abs((((xs - bx) / 0.018 + 100.5) % 1) - 0.5) < 0.2) {
-            rg = G_SLASH;
-            rc = step(R_BOAT, 0.4);
-            return;
-          }
-        }
-      }
-
-      // Mt. Fuji, small and calm behind the claw.
-      const fd = Math.abs(xs - XF) / 0.2;
-      if (fd < 1) {
-        const f = Math.pow(1 - fd, 1.25);
-        const topY = HORIZON - 0.14 * f;
-        if (ys >= topY && ys <= HORIZON + 0.01) {
-          const snowLine = HORIZON - 0.14 * 0.62 + 0.012 * Math.sin(xs * 110);
-          if (ys < snowLine) {
-            rg = G_CARET;
-            rc = step(R_SNOW, 0.5 + 0.5 * (1 - (ys - topY) / 0.06));
-          } else {
-            const h1 = hash(x, y, 2);
-            rg = h1 < 0.55 ? (xs < XF ? G_SLASH : G_BACK) : G_DOT;
-            rc = step(R_FUJI, 0.3 + 0.5 * (1 - fd));
-          }
-          return;
-        }
-      }
-
-      if (ys >= HORIZON) {
-        // Open sea.
-        const td = clamp((ys - HORIZON) / 0.45);
-        const w1 = Math.sin(xs * (40 + 80 * td) + t * (0.8 + 0.8 * td) + Math.sin(ys * 60 + t * 0.3) * 1.4);
-        const w2 = Math.sin(xs * 23 - t * 0.55 + ys * 35);
-        const v = 0.5 + 0.25 * w1 + 0.25 * w2;
-        if (v > 0.52 - 0.1 * td) {
-          rg = v > 0.9 ? G_TILDE : v > 0.78 ? G_EQ : v > 0.66 ? G_DASH : G_DOT;
-          rc = v > 0.9 ? step(R_FOAM, 0.2 + td * 0.4) : step(td < 0.25 ? R_SEA_FAR : R_SEA, v * 0.8 + td * 0.3);
-        }
-        return;
-      }
-
-      // Sky: a low sun, drifting cloud strokes and a few stars.
-      const ds = Math.hypot(xs - SUN.x, ys - SUN.y);
-      const cl = Math.sin(xs * 4.5 + t * 0.04 + Math.sin(ys * 16 + t * 0.05) * 2.2) * Math.sin(ys * 34 + xs * 1.5);
-      if (ds < SUN.r && cl < 0.62) {
-        const k = ds / SUN.r;
-        rg = SUN_GLYPHS[Math.min(4, Math.floor((1 - k) * 5))];
-        rc = step(R_SUN, 1 - k * 0.9);
-      } else if (cl > 0.55) {
-        rg = cl > 0.8 ? G_EQ : G_DASH;
-        rc = step(R_CLOUD, (cl - 0.55) * 2.2);
-      } else if (ds < SUN.r * 1.8 && hash(x, y, Math.floor(t * 2)) < 0.16 * (1 - (ds - SUN.r) / (SUN.r * 0.8))) {
-        rg = G_DOT;
-        rc = step(R_SUN, 0.35);
-      } else {
-        const h1 = hash(x, y, 0);
-        if (h1 < 0.004) {
-          rg = G_DOT;
-          rc = step(R_STAR, 0.3 + 0.5 * (0.5 + 0.5 * Math.sin(t * 2 + h1 * 9000)));
-        }
-      }
-    };
-
-    const buildAtlas = () => {
+    const uploadAtlas = (fontSize: number) => {
       const a = document.createElement("canvas");
-      a.width = GL.length * cw * dpr;
-      a.height = COLORS.length * ch * dpr;
+      a.width = NG * cw;
+      a.height = ch;
       const c = a.getContext("2d");
       if (!c) return;
-      c.scale(dpr, dpr);
-      c.font = `500 ${fontSize}px ${family}`;
+      c.font = `600 ${fontSize}px ${family}`;
       c.textAlign = "center";
       c.textBaseline = "middle";
-      COLORS.forEach((col, ci) => {
-        c.fillStyle = col;
-        for (let i = 1; i < GL.length; i++) c.fillText(GL[i], i * cw + cw / 2, ci * ch + ch / 2 + 1);
-      });
-      atlas = a;
+      c.fillStyle = "#fff";
+      for (let i = 1; i < NG; i++) c.fillText(GLYPHS[i], i * cw + cw / 2, ch / 2 + 1);
+      gl.activeTexture(gl.TEXTURE1);
+      gl.bindTexture(gl.TEXTURE_2D, atlasTex);
+      gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA, gl.RGBA, gl.UNSIGNED_BYTE, a);
     };
 
-    const resize = () => {
+    /** Sample the print into the glyph grid. Runs on load and on resize. */
+    const build = () => {
       dpr = Math.min(window.devicePixelRatio || 1, 2);
-      W = canvas.clientWidth;
-      H = canvas.clientHeight;
-      canvas.width = Math.floor(W * dpr);
-      canvas.height = Math.floor(H * dpr);
-      ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
-      fontSize = W < 640 ? 10 : W > 2200 ? 16 : 12;
-      ctx.font = `500 ${fontSize}px ${family}`;
-      cw = Math.max(5, Math.round(ctx.measureText("M").width));
-      ch = Math.round(fontSize * 1.4);
-      cols = Math.ceil(W / cw);
-      rows = Math.ceil(H / ch);
-      buildAtlas();
-    };
+      Wd = Math.floor(canvas.clientWidth * dpr);
+      Hd = Math.floor(canvas.clientHeight * dpr);
+      if (!Wd || !Hd) return;
+      canvas.width = Wd;
+      canvas.height = Hd;
+      gl.viewport(0, 0, Wd, Hd);
 
-    const frame = (now: number) => {
-      if (disposed || !atlas) return;
-      const t = reduced ? INTRO + 4 : (now - start) / 1000;
-      ctx.clearRect(0, 0, W, H);
+      cw = clamp(Math.ceil(Wd / 360), 4, 14);
+      ch = cw * 2;
+      const fontSize = cw / 0.58;
+      vc = Math.ceil(Wd / cw);
+      vr = Math.ceil(Hd / ch);
+      const scale = Math.max(Wd / img.naturalWidth, Hd / img.naturalHeight);
+      gc = Math.max(vc, Math.ceil((img.naturalWidth * scale) / cw));
+      gr = Math.max(vr, Math.ceil((img.naturalHeight * scale) / ch));
 
-      // Fit the scene: wide screens zoom in, narrow ones crop around the wave.
-      const aspect = W / H;
-      const S = clamp(aspect / 1.4, 0.62, 1.1);
-      pointer.sx += (((pointer.x / W - 0.5) * 0.04 || 0) - pointer.sx) * 0.05;
-      const sweep = clamp(t / INTRO) * 1.3;
-      const tick = Math.floor(t * 14);
-      const aw = cw * dpr;
-      const ah = ch * dpr;
-      const live = ripples.filter((r) => t - r.t0 < 2.2);
-      ripples.length = 0;
-      ripples.push(...live);
-      const px = pointer.x / cw;
-      const py = pointer.y / ch;
-      const ratio = ch / cw;
+      const shapes = glyphShapes(fontSize);
+      let dmax = 0;
+      const g2 = new Float32Array(NG);
+      const avg = new Float32Array(NG);
+      for (let j = 0; j < NG; j++) {
+        let sum = 0;
+        for (let i = 0; i < NB; i++) {
+          const v = shapes[j * NB + i];
+          sum += v;
+          g2[j] += v * v;
+        }
+        avg[j] = sum / NB;
+        dmax = Math.max(dmax, avg[j]);
+      }
+      const tScale = Math.min(1, dmax * 1.15);
+      const ramp = RAMP_SET.map((j) => ({ j, c: avg[j] })).sort((a, b) => a.c - b.c);
 
-      for (let y = 0; y < rows; y++) {
-        const ys = ((y + 0.5) * ch / H - 0.5) / S + 0.46;
-        for (let x = 0; x < cols; x++) {
-          const nx = x / cols;
-          if (nx > sweep) continue;
-          if (sweep - nx < 0.07 && t < INTRO + 0.4) {
-            rg = SCRAMBLE[Math.floor(hash(x, y, tick) * SCRAMBLE.length)];
-            rc = step(R_FOAM, 1);
-          } else {
-            const xs = ((x + 0.5) * cw / H - aspect / 2 - pointer.sx) / S + 0.62;
-            resolve(x, y, xs, ys, t);
-          }
+      const off = document.createElement("canvas");
+      off.width = gc * BX;
+      off.height = gr * BY;
+      const o = off.getContext("2d", { willReadFrequently: true });
+      if (!o) return;
+      o.imageSmoothingQuality = "high";
+      o.drawImage(img, 0, 0, off.width, off.height);
+      const px = o.getImageData(0, 0, off.width, off.height).data;
 
-          for (const rp of ripples) {
-            const age = t - rp.t0;
-            const dd = Math.hypot(x - rp.x, (y - rp.y) * ratio);
-            if (Math.abs(dd - age * 22) < 1.4) {
-              rg = G_O;
-              rc = step(R_FOAM, 1 - age / 2.2);
+      const pw = off.width;
+      const lumAll = new Float32Array(pw * off.height);
+      for (let i = 0; i < lumAll.length; i++) {
+        lumAll[i] = (0.2126 * px[i * 4] + 0.7152 * px[i * 4 + 1] + 0.0722 * px[i * 4 + 2]) / 255;
+      }
+      const blurred = boxBlur(lumAll, pw, off.height, 6);
+
+      const cells = new Uint8Array(gc * gr * 4);
+      const T = new Float32Array(NB);
+      const stride = off.width * 4;
+
+      for (let cy = 0; cy < gr; cy++) {
+        for (let cx = 0; cx < gc; cx++) {
+          const i = (cy * gc + cx) * 4;
+          cells[i + 3] = 100;
+          let sv = 0;
+          let sr = 0;
+          let sg = 0;
+          let sb = 0;
+          let sl = 0;
+          let mv = 0;
+          for (let by = 0; by < BY; by++) {
+            for (let bx = 0; bx < BX; bx++) {
+              const p = (cy * BY + by) * stride + (cx * BX + bx) * 4;
+              const r = px[p] / 255;
+              const g = px[p + 1] / 255;
+              const b = px[p + 2] / 255;
+              const li = (cy * BY + by) * pw + cx * BX + bx;
+              const lum = clamp(lumAll[li] + 1.1 * (lumAll[li] - blurred[li]));
+              // Lift the darks so the indigo stays visible on a dark page, and
+              // quieten the cream paper so the wave and foam carry the picture.
+              const warm = r - b;
+              const paper = smooth(0.05, 0.15, warm);
+              const v = (0.08 + 0.92 * Math.pow(lum, 2.4)) * (1 - 0.7 * paper);
+              T[by * BX + bx] = v * tScale;
+              sv += v;
+              sr += v * r;
+              sg += v * g;
+              sb += v * b;
+              sl += lum;
+              if (v > mv) mv = v;
             }
           }
+          if (sv / NB < 0.06) continue;
 
-          if (pointer.active) {
-            const dd = Math.hypot(x - px, (y - py) * ratio);
-            if (dd < 16) {
-              const k = 1 - dd / 16;
-              if (rg) rc = step(R_GLOW, k * 1.2);
-              else if (hash(x, y, tick) < 0.25 * k * k) {
-                rg = G_DOT;
-                rc = step(R_GLOW, k);
+          const mean = (sv / NB) * tScale;
+          let spread = 0;
+          for (let k = 0; k < NB; k++) spread += Math.abs(T[k] - mean);
+          spread /= NB;
+
+          let best = 0;
+          let bestScore = Infinity;
+          if (spread < 0.08) {
+            // Flat tone: pick from the isotropic ramp, jittered so it never bands.
+            const want = mean + (hash(cx, cy, 4) - 0.5) * 0.12;
+            for (const r of ramp) {
+              const d = Math.abs(r.c - want);
+              if (d < bestScore) {
+                bestScore = d;
+                best = r.j;
+              }
+            }
+          } else {
+            // Detail (outlines, foam edges): match the actual stroke shape.
+            const dither = (hash(cx, cy, 1) - 0.5) * 0.05;
+            for (let k = 0; k < NB; k++) T[k] = clamp(T[k] + dither * (0.5 + hash(cx * 7 + k, cy, 2)));
+            for (let j = 1; j < NG; j++) {
+              let dot = 0;
+              const base = j * NB;
+              for (let k = 0; k < NB; k++) dot += shapes[base + k] * T[k];
+              const score = g2[j] - 2 * dot;
+              if (score < bestScore) {
+                bestScore = score;
+                best = j;
               }
             }
           }
+          cells[i] = best;
 
-          if (rg) ctx.drawImage(atlas, rg * aw, rc * ah, aw, ah, x * cw, y * ch, cw, ch);
+          // Colour: keep the cell's hue, normalise its brightness, then snap to Kanagawa.
+          const m = Math.max(sr, sg, sb) || 1;
+          const bf = 0.85 + 0.15 * clamp(mv);
+          const nr = sr / m;
+          const ng = sg / m;
+          const nb = sb / m;
+          const gray = (nr + ng + nb) / 3;
+          // Push saturation so snapping to the palette keeps the indigo / cream split.
+          const sat = (c: number) => clamp(gray + (c - gray) * 1.8) * bf * 255;
+          const L = toLab(sat(nr), sat(ng), sat(nb));
+          let pi = 0;
+          let pd = Infinity;
+          for (let k = 0; k < PAL_LAB.length; k++) {
+            const d = (L[0] - PAL_LAB[k][0]) ** 2 + (L[1] - PAL_LAB[k][1]) ** 2 + (L[2] - PAL_LAB[k][2]) ** 2;
+            if (d < pd) {
+              pd = d;
+              pi = k;
+            }
+          }
+          cells[i + 1] = Math.floor(pi / LEVELS);
+          cells[i + 2] = pi % LEVELS;
+          const warmCell = sr / sv - sb / sv > 0.06;
+          cells[i + 3] = 100 + (warmCell ? 0 : sl / NB > 0.62 ? 2 : 1);
         }
       }
 
-      // Sakura petals crossing the print, top right to bottom left.
-      if (t > INTRO) {
-        for (let i = 0; i < 26; i++) {
-          const h1 = hash(i, 1, 1);
-          const h2 = hash(i, 2, 2);
-          const h3 = hash(i, 3, 3);
-          const life = (t * (0.025 + 0.025 * h1) + h2) % 1;
-          const x = Math.round(cols * (1.1 - 1.2 * life) + Math.sin(life * 9 + h3 * 6) * 3);
-          const y = Math.round(rows * life * 0.95 + Math.sin(life * 14 + h3 * 9) * 2);
-          if (x < 0 || y < 0 || x >= cols || y >= rows) continue;
-          const gi = i % 4 === 0 ? G_STAR : PETALS[i % PETALS.length];
-          ctx.drawImage(atlas, gi * aw, step(R_PETAL, h3) * ah, aw, ah, x * cw, y * ch, cw, ch);
-        }
-      }
+      gl.activeTexture(gl.TEXTURE0);
+      gl.bindTexture(gl.TEXTURE_2D, dataTex);
+      gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA, gc, gr, 0, gl.RGBA, gl.UNSIGNED_BYTE, cells);
+      uploadAtlas(fontSize);
+      gl.uniform2f(U("uRes"), Wd, Hd);
+      gl.uniform2f(U("uCell"), cw, ch);
+      gl.uniform2f(U("uGrid"), gc, gr);
+      gl.uniform2f(U("uVis"), vc, vr);
+    };
 
+    const frame = (now: number) => {
+      if (disposed) return;
       if (!reduced) raf = requestAnimationFrame(frame);
+      if (!gc) return;
+      const t = reduced ? INTRO + 6 : (now - start) / 1000;
+
+      // Camera: the pointer pans around the print; otherwise it drifts gently.
+      const tx = pointer.active ? pointer.x / canvas.clientWidth : 0.42 + 0.14 * Math.sin(t * 0.05);
+      const ty = pointer.active ? 0.15 + 0.7 * (pointer.y / canvas.clientHeight) : 0.25;
+      pan.x += (tx - pan.x) * 0.05;
+      pan.y += (ty - pan.y) * 0.05;
+
+      const rip = new Float32Array(12).fill(0);
+      for (let i = 0; i < 4; i++) rip[i * 3 + 2] = -100;
+      ripples.slice(-4).forEach((r, i) => rip.set([r.x, r.y, r.t0], i * 3));
+
+      gl.uniform2f(U("uView"), Math.round((gc - vc) * clamp(pan.x)), Math.round((gr - vr) * clamp(pan.y)));
+      gl.uniform2f(U("uPtr"), (pointer.x * dpr) / cw, (pointer.y * dpr) / ch);
+      gl.uniform1f(U("uActive"), pointer.active ? 1 : 0);
+      gl.uniform1f(U("uTime"), t);
+      gl.uniform1f(U("uSweep"), clamp(t / INTRO) * 1.3);
+      gl.uniform1f(U("uSlab"), t < INTRO + 0.4 ? 1 : 0);
+      gl.uniform3fv(U("uRip"), rip);
+      gl.clearColor(0, 0, 0, 0);
+      gl.clear(gl.COLOR_BUFFER_BIT);
+      gl.drawArrays(gl.TRIANGLES, 0, 3);
     };
 
     const onMove = (e: PointerEvent) => {
@@ -399,24 +573,32 @@ export default function KanagawaWave() {
     };
     const onDown = (e: PointerEvent) => {
       onMove(e);
-      ripples.push({ x: pointer.x / cw, y: pointer.y / ch, t0: (performance.now() - start) / 1000 });
-      if (ripples.length > 5) ripples.shift();
+      ripples.push({ x: (pointer.x * dpr) / cw, y: (pointer.y * dpr) / ch, t0: (performance.now() - start) / 1000 });
+      if (ripples.length > 4) ripples.shift();
     };
 
-    const init = () => {
+    const rebuildSoon = () => {
+      window.clearTimeout(rebuild);
+      rebuild = window.setTimeout(() => {
+        if (disposed || !ready) return;
+        build();
+        if (reduced) frame(performance.now());
+      }, 120);
+    };
+
+    img.onload = () => {
       if (disposed) return;
-      family =
-        getComputedStyle(canvas).getPropertyValue("--font-geist-mono").trim() || "monospace";
-      resize();
-      raf = requestAnimationFrame(frame);
+      ready = true;
+      family = getComputedStyle(canvas).getPropertyValue("--font-geist-mono").trim() || "monospace";
+      document.fonts.ready.then(() => {
+        if (disposed) return;
+        build();
+        raf = requestAnimationFrame(frame);
+      });
     };
-    document.fonts.ready.then(init);
+    img.src = SRC;
 
-    const ro = new ResizeObserver(() => {
-      if (!atlas) return;
-      resize();
-      if (reduced) frame(performance.now());
-    });
+    const ro = new ResizeObserver(rebuildSoon);
     ro.observe(canvas);
     canvas.addEventListener("pointermove", onMove, { passive: true });
     canvas.addEventListener("pointerdown", onDown);
@@ -424,6 +606,7 @@ export default function KanagawaWave() {
 
     return () => {
       disposed = true;
+      window.clearTimeout(rebuild);
       cancelAnimationFrame(raf);
       ro.disconnect();
       canvas.removeEventListener("pointermove", onMove);
@@ -435,7 +618,7 @@ export default function KanagawaWave() {
   return (
     <canvas
       ref={canvasRef}
-      aria-label="The Great Wave off Kanagawa, drawn in animated ASCII"
+      aria-label="The Great Wave off Kanagawa by Hokusai, drawn in animated ASCII"
       role="img"
       className="absolute inset-0 h-full w-full touch-none"
     />
