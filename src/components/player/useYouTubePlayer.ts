@@ -4,6 +4,7 @@ import { useEffect, useRef, useState } from "react";
 
 export interface YTPlayer {
   cueVideoById(videoId: string): void;
+  loadVideoById(videoId: string): void;
   playVideo(): void;
   pauseVideo(): void;
   seekTo(seconds: number, allowSeekAhead: boolean): void;

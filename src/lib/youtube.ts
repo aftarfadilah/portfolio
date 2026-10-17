@@ -43,3 +43,34 @@ export function parseYouTubeId(input: string): string | null {
 
   return candidate && isYouTubeId(candidate) ? candidate : null;
 }
+
+const PLAYLIST_PATTERN = /^[\w-]{10,64}$/;
+
+export function isYouTubePlaylistId(value: string): boolean {
+  return PLAYLIST_PATTERN.test(value);
+}
+
+export type YouTubeLink =
+  | { kind: "video"; id: string }
+  | { kind: "playlist"; id: string };
+
+/**
+ * Classifies a pasted link. A link carrying a video id is a single video, even
+ * when it also has `list=` (that's just "this video, inside a playlist");
+ * `/playlist?list=…` links are playlists.
+ */
+export function parseYouTubeLink(input: string): YouTubeLink | null {
+  const video = parseYouTubeId(input);
+  if (video) return { kind: "video", id: video };
+
+  const text = input.trim();
+  let url: URL;
+  try {
+    url = new URL(/^https?:\/\//i.test(text) ? text : `https://${text}`);
+  } catch {
+    return null;
+  }
+  if (!YOUTUBE_HOSTS.has(url.hostname.toLowerCase())) return null;
+  const list = url.searchParams.get("list");
+  return list && isYouTubePlaylistId(list) ? { kind: "playlist", id: list } : null;
+}

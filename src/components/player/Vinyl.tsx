@@ -1,44 +1,100 @@
 "use client";
 
 import { useEffect, useMemo, useRef, useState } from "react";
-import { useFrame, useThree } from "@react-three/fiber";
+import { useFrame } from "@react-three/fiber";
 import * as THREE from "three";
-import { holoFragment, holoVertex } from "./holo";
 import { loadLabelTexture, makeGrooveTexture } from "./textures";
 import {
-  DRAG_Y,
   PLATTER_CENTER,
   RECORD_RADIUS,
   SEATED_Y,
-  SHELF,
+  type Anchor,
   type Sim,
 } from "./sim";
 
-type Status = "shelf" | "drag" | "seated";
-
-const DROP_RADIUS = 1.1;
 const LABEL_RADIUS = 0.52;
 const THICKNESS = 0.02;
+
+// Pick sequence: slide out of the jacket, swipe across, settle onto the platter.
+const OUT_TIME = 0.85;
+const CARRY_TIME = 1.1;
+const LOWER_TIME = 0.75;
+const JACKET_TRAVEL = 3.3; // how far the disc slides before it clears the jacket
+const HOVER_HEIGHT = 1.0;
+
+// Records leave toward the rack on the left.
+const FROM_RACK = new THREE.Vector3(-8, 1.6, 0.8);
+
+type Phase = "wait" | "out" | "carry" | "lower" | "seated" | "leaving";
+
+const smooth = (t: number) => t * t * (3 - 2 * t);
+const easeOut = (t: number) => 1 - Math.pow(1 - t, 3);
+
+interface Rig {
+  up: THREE.Vector3;
+  normal: THREE.Vector3;
+  from: THREE.Vector3;
+  control: THREE.Vector3;
+  hover: THREE.Vector3;
+  seat: THREE.Vector3;
+  pos: THREE.Vector3;
+  qFrom: THREE.Quaternion;
+  qHover: THREE.Quaternion;
+  qFlat: THREE.Quaternion;
+  faceUp: THREE.Quaternion;
+  sFrom: number;
+}
+
+function makeRig(): Rig {
+  return {
+    up: new THREE.Vector3(),
+    normal: new THREE.Vector3(),
+    from: new THREE.Vector3(),
+    control: new THREE.Vector3(),
+    hover: new THREE.Vector3(
+      PLATTER_CENTER.x,
+      SEATED_Y + HOVER_HEIGHT,
+      PLATTER_CENTER.z,
+    ),
+    seat: new THREE.Vector3(PLATTER_CENTER.x, SEATED_Y, PLATTER_CENTER.z),
+    pos: new THREE.Vector3(),
+    qFrom: new THREE.Quaternion(),
+    qHover: new THREE.Quaternion().setFromEuler(
+      new THREE.Euler(0.1, 0.5, -0.16),
+    ),
+    qFlat: new THREE.Quaternion(),
+    faceUp: new THREE.Quaternion().setFromAxisAngle(
+      new THREE.Vector3(1, 0, 0),
+      Math.PI / 2,
+    ),
+    sFrom: 1,
+  };
+}
 
 interface VinylProps {
   videoId: string;
   simRef: React.RefObject<Sim>;
-  resetToken: number;
-  onSeat: () => void;
-  onUnseat: () => void;
+  anchor: React.RefObject<Anchor>;
+  leaving: boolean;
+  onCarry: () => void;
 }
 
-export function Vinyl({ videoId, simRef, resetToken, onSeat, onUnseat }: VinylProps) {
-  const { camera, gl, pointer } = useThree();
+export function Vinyl({
+  videoId,
+  simRef,
+  anchor: anchorRef,
+  leaving,
+  onCarry,
+}: VinylProps) {
   const group = useRef<THREE.Group>(null);
   const spin = useRef<THREE.Group>(null);
-  const zone = useRef<THREE.Mesh>(null);
-  const status = useRef<Status>("shelf");
-  const target = useRef(new THREE.Vector3());
-  const handlers = useRef({ onSeat, onUnseat });
+  const phase = useRef<Phase>("wait");
+  const clock = useRef(0);
+  const onCarryRef = useRef(onCarry);
   useEffect(() => {
-    handlers.current = { onSeat, onUnseat };
+    onCarryRef.current = onCarry;
   });
+  const rigRef = useRef<Rig | null>(null);
 
   const [label, setLabel] = useState<THREE.Texture | null>(null);
   const grooves = useMemo(() => makeGrooveTexture(), []);
@@ -61,234 +117,160 @@ export function Vinyl({ videoId, simRef, resetToken, onSeat, onUnseat }: VinylPr
     };
   }, [videoId]);
 
-  const holoGeometry = useMemo(() => {
-    const g = new THREE.CircleGeometry(LABEL_RADIUS, 64);
-    g.rotateX(-Math.PI / 2);
-    return g;
-  }, []);
-  const holoMaterial = useRef<THREE.ShaderMaterial>(null);
-  const holoUniforms = useMemo(
-    () => ({
-      uTime: { value: 0 },
-      uLight: { value: new THREE.Vector2(1, 0) },
-      uRadius: { value: LABEL_RADIUS },
-      uIntensity: { value: 1 },
-    }),
-    [],
-  );
-
-  // A new record falls in from above; an error/reset sends it back to the shelf.
-  const mounted = useRef(false);
-  useEffect(() => {
-    if (!mounted.current) {
-      mounted.current = true;
-      return;
-    }
-    status.current = "shelf";
-    simRef.current.discSeated = false;
-  }, [resetToken, simRef]);
   useEffect(
     () => () => {
       simRef.current.discSeated = false;
-      document.body.style.cursor = "";
     },
     [simRef],
   );
 
-  const raycaster = useMemo(() => new THREE.Raycaster(), []);
-  const plane = useMemo(
-    () => new THREE.Plane(new THREE.Vector3(0, 1, 0), -DRAG_Y),
-    [],
-  );
-
-  function aim(ev: PointerEvent) {
-    const rect = gl.domElement.getBoundingClientRect();
-    const ndc = new THREE.Vector2(
-      ((ev.clientX - rect.left) / rect.width) * 2 - 1,
-      -((ev.clientY - rect.top) / rect.height) * 2 + 1,
-    );
-    raycaster.setFromCamera(ndc, camera);
-    raycaster.ray.intersectPlane(plane, target.current);
-  }
-
-  function beginDrag(ev: PointerEvent) {
-    if (status.current === "seated") handlers.current.onUnseat();
-    simRef.current.discSeated = false;
-    status.current = "drag";
-    document.body.style.cursor = "grabbing";
-    aim(ev);
-
-    const move = (e: PointerEvent) => aim(e);
-    const up = () => {
-      window.removeEventListener("pointermove", move);
-      window.removeEventListener("pointerup", up);
-      window.removeEventListener("pointercancel", up);
-      document.body.style.cursor = "";
-      const near =
-        Math.hypot(
-          target.current.x - PLATTER_CENTER.x,
-          target.current.z - PLATTER_CENTER.z,
-        ) < DROP_RADIUS;
-      if (near) {
-        status.current = "seated";
-        simRef.current.discSeated = true;
-        handlers.current.onSeat();
-      } else {
-        status.current = "shelf";
-      }
-    };
-    window.addEventListener("pointermove", move);
-    window.addEventListener("pointerup", up);
-    window.addEventListener("pointercancel", up);
-  }
-
-  useFrame((state, delta) => {
+  useFrame((_, delta) => {
     const g = group.current;
     if (!g) return;
     const dt = Math.min(delta, 0.05);
-    const st = status.current;
+    const sim = simRef.current;
+    const r = (rigRef.current ??= makeRig());
+    const anchor = anchorRef.current;
 
-    let tx: number, ty: number, tz: number;
-    if (st === "drag") {
-      tx = target.current.x;
-      ty = DRAG_Y;
-      tz = target.current.z;
-    } else if (st === "seated") {
-      tx = PLATTER_CENTER.x;
-      ty = SEATED_Y;
-      tz = PLATTER_CENTER.z;
-    } else {
-      tx = SHELF.x;
-      ty = SHELF.y;
-      tz = SHELF.z;
+    if (leaving && phase.current !== "leaving") {
+      phase.current = "leaving";
+      sim.discSeated = false;
+      g.visible = true;
     }
+    clock.current += dt;
 
-    const lambda = st === "drag" ? 14 : 6;
-    const px = g.position.x;
-    const pz = g.position.z;
-    g.position.x = THREE.MathUtils.damp(px, tx, lambda, dt);
-    g.position.y = THREE.MathUtils.damp(g.position.y, ty, lambda, dt);
-    g.position.z = THREE.MathUtils.damp(pz, tz, lambda, dt);
-
-    const vx = (g.position.x - px) / Math.max(dt, 1e-4);
-    const vz = (g.position.z - pz) / Math.max(dt, 1e-4);
-    const tilt = st === "drag" ? 0.045 : 0;
-    g.rotation.x = THREE.MathUtils.damp(
-      g.rotation.x,
-      THREE.MathUtils.clamp(vz * tilt, -0.5, 0.5),
-      8,
-      dt,
-    );
-    g.rotation.z = THREE.MathUtils.damp(
-      g.rotation.z,
-      THREE.MathUtils.clamp(-vx * tilt, -0.5, 0.5),
-      8,
-      dt,
-    );
-
-    if (st === "seated" && spin.current) spin.current.rotation.y = simRef.current.platterAngle;
-
-    const t = state.clock.elapsedTime;
-    const ang = pointer.x * 1.6 + t * 0.12;
-    const holo = holoMaterial.current;
-    if (holo) {
-      holo.uniforms.uTime.value = t;
-      (holo.uniforms.uLight.value as THREE.Vector2).set(Math.cos(ang), Math.sin(ang));
-    }
-
-    const z = zone.current;
-    if (z) {
-      const mat = z.material as THREE.MeshBasicMaterial;
-      const near =
-        Math.hypot(g.position.x - PLATTER_CENTER.x, g.position.z - PLATTER_CENTER.z) <
-        DROP_RADIUS;
-      const want = st === "drag" ? (near ? 0.85 : 0.35) : 0;
-      mat.opacity = THREE.MathUtils.damp(mat.opacity, want, 10, dt);
+    switch (phase.current) {
+      case "wait": {
+        // Hidden inside the jacket until the sleeve has turned to face us.
+        g.visible = false;
+        if (anchor.settled || clock.current > 2.5) {
+          phase.current = "out";
+          clock.current = 0;
+        }
+        break;
+      }
+      case "out": {
+        // Slide out of the jacket's right edge, then ease forward off its face.
+        const e = smooth(Math.min(clock.current / OUT_TIME, 1));
+        r.up.set(1, 0, 0).applyQuaternion(anchor.quat);
+        r.normal.set(0, 0, 1).applyQuaternion(anchor.quat);
+        const clear = smooth(Math.max(0, (e - 0.55) / 0.45));
+        r.pos
+          .copy(anchor.pos)
+          .addScaledVector(r.up, JACKET_TRAVEL * anchor.scale * e)
+          .addScaledVector(r.normal, 0.3 * anchor.scale * clear);
+        g.position.copy(r.pos);
+        g.quaternion.copy(anchor.quat).multiply(r.faceUp);
+        g.scale.setScalar(anchor.scale);
+        g.visible = true;
+        if (clock.current >= OUT_TIME) {
+          r.from.copy(g.position);
+          r.qFrom.copy(g.quaternion);
+          r.sFrom = g.scale.x;
+          phase.current = "carry";
+          clock.current = 0;
+          onCarryRef.current();
+        }
+        break;
+      }
+      case "carry": {
+        // A soft arc across to the right, banking and laying flat as it goes.
+        const t = Math.min(clock.current / CARRY_TIME, 1);
+        const u = smooth(t);
+        r.control.copy(r.from).lerp(r.hover, 0.5);
+        r.control.y += 1.2;
+        const a = 1 - u;
+        g.position
+          .copy(r.from)
+          .multiplyScalar(a * a)
+          .addScaledVector(r.control, 2 * a * u)
+          .addScaledVector(r.hover, u * u);
+        g.quaternion.slerpQuaternions(r.qFrom, r.qHover, u);
+        g.scale.setScalar(THREE.MathUtils.lerp(r.sFrom, 1, u));
+        if (t >= 1) {
+          phase.current = "lower";
+          clock.current = 0;
+        }
+        break;
+      }
+      case "lower": {
+        // Gentle descent onto the spindle; the label turns to match the platter.
+        const t = Math.min(clock.current / LOWER_TIME, 1);
+        const u = easeOut(t);
+        g.position.lerpVectors(r.hover, r.seat, u);
+        g.quaternion.slerpQuaternions(r.qHover, r.qFlat, u);
+        g.scale.setScalar(1);
+        if (spin.current) spin.current.rotation.y = sim.platterAngle;
+        if (t >= 1) {
+          phase.current = "seated";
+          sim.discSeated = true;
+        }
+        break;
+      }
+      case "seated": {
+        g.position.copy(r.seat);
+        g.quaternion.identity();
+        if (spin.current) spin.current.rotation.y = sim.platterAngle;
+        break;
+      }
+      case "leaving": {
+        g.position.x = THREE.MathUtils.damp(g.position.x, FROM_RACK.x, 3.5, dt);
+        g.position.y = THREE.MathUtils.damp(g.position.y, FROM_RACK.y, 3.5, dt);
+        g.position.z = THREE.MathUtils.damp(g.position.z, FROM_RACK.z, 3.5, dt);
+        break;
+      }
     }
   });
 
   return (
-    <>
-      <mesh
-        ref={zone}
-        position={[PLATTER_CENTER.x, SEATED_Y + 0.012, PLATTER_CENTER.z]}
-        rotation={[-Math.PI / 2, 0, 0]}
-      >
-        <ringGeometry args={[RECORD_RADIUS - 0.07, RECORD_RADIUS, 96]} />
-        <meshBasicMaterial color="#7c9cff" transparent opacity={0} depthWrite={false} />
-      </mesh>
-
-      <group
-        ref={group}
-        position={[SHELF.x, SHELF.y + 2.2, SHELF.z]}
-        onPointerDown={(e) => {
-          e.stopPropagation();
-          beginDrag(e.nativeEvent);
-        }}
-        onPointerOver={() => {
-          if (status.current !== "drag") document.body.style.cursor = "grab";
-        }}
-        onPointerOut={() => {
-          if (status.current !== "drag") document.body.style.cursor = "";
-        }}
-      >
-        <group ref={spin}>
-          <mesh castShadow>
-            <cylinderGeometry args={[RECORD_RADIUS, RECORD_RADIUS, THICKNESS, 96]} />
-            <meshStandardMaterial color="#0a0a0c" roughness={0.45} metalness={0.15} />
-          </mesh>
-          <mesh
-            rotation={[-Math.PI / 2, 0, 0]}
-            position={[0, THICKNESS / 2 + 0.0004, 0]}
-          >
-            <circleGeometry args={[RECORD_RADIUS - 0.01, 96]} />
-            <meshStandardMaterial
-              map={grooves}
-              roughness={0.32}
-              metalness={0.25}
-              polygonOffset
-              polygonOffsetFactor={-1}
-            />
-          </mesh>
-          <mesh
-            rotation={[-Math.PI / 2, 0, 0]}
-            position={[0, THICKNESS / 2 + 0.0009, 0]}
-          >
-            <circleGeometry args={[LABEL_RADIUS, 64]} />
-            <meshStandardMaterial
-              key={label ? "label" : "blank"}
-              map={label}
-              color={label ? "#9c9c9c" : "#c9c2b0"}
-              roughness={0.5}
-              polygonOffset
-              polygonOffsetFactor={-2}
-            />
-          </mesh>
-          <mesh position={[0, THICKNESS / 2 + 0.002, 0]}>
-            <cylinderGeometry args={[0.03, 0.03, 0.004, 24]} />
-            <meshStandardMaterial color="#9a9aa2" metalness={0.9} roughness={0.3} />
-          </mesh>
-        </group>
-
+    <group ref={group} visible={false}>
+      <group ref={spin}>
+        <mesh castShadow>
+          <cylinderGeometry
+            args={[RECORD_RADIUS, RECORD_RADIUS, THICKNESS, 96]}
+          />
+          <meshStandardMaterial
+            color="#0a0a0c"
+            roughness={0.45}
+            metalness={0.15}
+          />
+        </mesh>
         <mesh
-          geometry={holoGeometry}
-          position={[0, THICKNESS / 2 + 0.0016, 0]}
-          renderOrder={2}
+          rotation={[-Math.PI / 2, 0, 0]}
+          position={[0, THICKNESS / 2 + 0.0004, 0]}
         >
-          <shaderMaterial
-            ref={holoMaterial}
-            vertexShader={holoVertex}
-            fragmentShader={holoFragment}
-            uniforms={holoUniforms}
-            transparent
-            depthWrite={false}
-            toneMapped={false}
-            blending={THREE.AdditiveBlending}
+          <circleGeometry args={[RECORD_RADIUS - 0.01, 96]} />
+          <meshStandardMaterial
+            map={grooves}
+            roughness={0.32}
+            metalness={0.25}
             polygonOffset
-            polygonOffsetFactor={-4}
+            polygonOffsetFactor={-1}
+          />
+        </mesh>
+        <mesh
+          rotation={[-Math.PI / 2, 0, 0]}
+          position={[0, THICKNESS / 2 + 0.0009, 0]}
+        >
+          <circleGeometry args={[LABEL_RADIUS, 64]} />
+          <meshStandardMaterial
+            key={label ? "label" : "blank"}
+            map={label}
+            color={label ? "#9c9c9c" : "#c9c2b0"}
+            roughness={0.5}
+            polygonOffset
+            polygonOffsetFactor={-2}
+          />
+        </mesh>
+        <mesh position={[0, THICKNESS / 2 + 0.002, 0]}>
+          <cylinderGeometry args={[0.03, 0.03, 0.004, 24]} />
+          <meshStandardMaterial
+            color="#9a9aa2"
+            metalness={0.9}
+            roughness={0.3}
           />
         </mesh>
       </group>
-    </>
+    </group>
   );
 }

@@ -1,20 +1,40 @@
 "use client";
 
-import { useEffect, useRef } from "react";
-import { Canvas, useThree } from "@react-three/fiber";
+import { useEffect, useMemo, useRef } from "react";
+import { Canvas, useFrame, useThree } from "@react-three/fiber";
 import * as THREE from "three";
 import { RoomEnvironment } from "three/addons/environments/RoomEnvironment.js";
 import { Turntable } from "./Turntable";
+import { Rack, RACK_X } from "./Rack";
 import { Vinyl } from "./Vinyl";
-import { SHELF, TABLE_Y, createSim, type ArmControl, type Sim } from "./sim";
+import type { Track } from "./library";
+import {
+  TABLE_Y,
+  createAnchor,
+  createSim,
+  type Anchor,
+  type ArmControl,
+  type Sim,
+} from "./sim";
+
+export type View = "deck" | "rack";
 
 export interface SceneProps {
-  videoId: string | null;
+  view: View;
+  records: Track[];
+  focus: number;
+  inspecting: boolean;
+  /** Video id of the record on (or heading to) the platter. */
+  loadedId: string | null;
+  leaving: boolean;
+  pickToken: number;
   want: boolean;
   progressRef: React.RefObject<number>;
-  resetToken: number;
-  onSeat: () => void;
-  onUnseat: () => void;
+  onFocus: (index: number) => void;
+  onInspect: () => void;
+  onBack: () => void;
+  /** The disc has left the jacket and is being carried to the turntable. */
+  onCarry: () => void;
   onNeedleDown: () => void;
   onLiftOff: () => void;
 }
@@ -37,26 +57,48 @@ function RoomEnv() {
   return null;
 }
 
-function CameraRig() {
+function CameraRig({ view }: { view: View }) {
   const { camera, size } = useThree();
-  useEffect(() => {
+  const look = useRef(new THREE.Vector3());
+  const placed = useRef(false);
+
+  const pose = useMemo(() => {
     const cam = camera as THREE.PerspectiveCamera;
     const aspect = size.width / size.height;
     const half = Math.tan(THREE.MathUtils.degToRad(cam.fov) / 2);
-    // Fit the plinth (±2.35 wide) and the shelf record (front) in both axes.
-    const dist = Math.max(2.7 / half, 2.6 / (half * aspect));
-    const focus = new THREE.Vector3(0, -0.2, 1.5);
+    if (view === "rack") {
+      const dist = Math.max(2.9 / half, 3.2 / (half * aspect));
+      const focus = new THREE.Vector3(RACK_X, 1.5, 0);
+      const dir = new THREE.Vector3(0, 0.2, 1).normalize();
+      return { focus, position: focus.clone().addScaledVector(dir, dist) };
+    }
+    // The plinth (4.7 x 3.7) centred in frame with room for the overlay UI.
+    const dist = Math.max(3.0 / half, 3.5 / (half * aspect));
+    const focus = new THREE.Vector3(0, TABLE_Y - 0.05, -0.1);
     const dir = new THREE.Vector3(0, 0.78, 0.63).normalize();
-    cam.position.copy(focus).addScaledVector(dir, dist);
-    cam.lookAt(focus);
-    cam.updateProjectionMatrix();
-  }, [camera, size]);
+    return { focus, position: focus.clone().addScaledVector(dir, dist) };
+  }, [camera, size, view]);
+
+  useFrame((_, delta) => {
+    const dt = Math.min(delta, 0.05);
+    if (!placed.current) {
+      placed.current = true;
+      camera.position.copy(pose.position);
+      look.current.copy(pose.focus);
+    } else {
+      const k = 1 - Math.exp(-3.2 * dt);
+      camera.position.lerp(pose.position, k);
+      look.current.lerp(pose.focus, k);
+    }
+    camera.lookAt(look.current);
+  });
   return null;
 }
 
 function World(props: SceneProps) {
-  const { videoId, want, progressRef, resetToken } = props;
+  const { view, want, progressRef, loadedId, leaving } = props;
   const sim = useRef<Sim>(createSim());
+  const anchor = useRef<Anchor>(createAnchor());
   const handlers = useRef(props);
   const control = useRef<ArmControl>({
     want: false,
@@ -83,7 +125,7 @@ function World(props: SceneProps) {
   return (
     <>
       <color attach="background" args={["#0d0f16"]} />
-      <CameraRig />
+      <CameraRig view={view} />
       <RoomEnv />
       <ambientLight intensity={0.35} />
       <directionalLight
@@ -99,31 +141,39 @@ function World(props: SceneProps) {
       />
       <pointLight position={[-4, 3, 4]} intensity={8} color="#8aa4ff" />
 
-      <mesh rotation={[-Math.PI / 2, 0, 0]} position={[0, TABLE_Y - 0.001, 0]} receiveShadow>
-        <planeGeometry args={[60, 60]} />
+      <mesh
+        rotation={[-Math.PI / 2, 0, 0]}
+        position={[0, TABLE_Y - 0.001, 0]}
+        receiveShadow
+      >
+        <planeGeometry args={[80, 60]} />
         <meshStandardMaterial color="#161823" roughness={0.85} />
       </mesh>
 
       <Turntable simRef={sim} controlRef={control} />
 
-      {videoId ? (
+      {loadedId && (
         <Vinyl
-          key={videoId}
-          videoId={videoId}
+          key={loadedId}
+          videoId={loadedId}
           simRef={sim}
-          resetToken={resetToken}
-          onSeat={props.onSeat}
-          onUnseat={props.onUnseat}
+          anchor={anchor}
+          leaving={leaving}
+          onCarry={() => handlers.current.onCarry()}
         />
-      ) : (
-        <mesh
-          rotation={[-Math.PI / 2, 0, 0]}
-          position={[SHELF.x, TABLE_Y + 0.002, SHELF.z]}
-        >
-          <ringGeometry args={[1.42, 1.5, 96]} />
-          <meshBasicMaterial color="#7c9cff" transparent opacity={0.25} />
-        </mesh>
       )}
+
+      <Rack
+        records={props.records}
+        focus={props.focus}
+        inspecting={props.inspecting}
+        active={view === "rack"}
+        pickToken={props.pickToken}
+        anchor={anchor}
+        onFocus={props.onFocus}
+        onInspect={props.onInspect}
+        onBack={props.onBack}
+      />
     </>
   );
 }
