@@ -1,135 +1,39 @@
 "use client";
 
-import { useEffect, useRef } from "react";
+import { useEffect, useRef, useState, useSyncExternalStore } from "react";
 import type { Spot } from "@/data/kanagawa-wiki";
+import {
+  GLYPHS,
+  H_CARP,
+  H_FOAM,
+  LEVELS,
+  NC,
+  NG,
+  PAL_RGB,
+  SCRAMBLE_FROM,
+  SPARK,
+  SRC,
+  clamp,
+  drawStatic,
+  sampleGrid,
+  type Grid,
+} from "./grid";
 
 /**
  * The Great Wave off Kanagawa as dense, coloured, animated ASCII.
  *
- * The print is sampled into a fine glyph grid. Each cell is a 4x8 patch of
- * pixels; the glyph whose ink pattern best matches that patch is chosen
- * (shape matching, not just a brightness ramp), and the cell is coloured with
- * the nearest colour of the Kanagawa palette. At runtime the grid is drawn
- * from a pre-rendered glyph atlas while the water flows, the foam glitters,
- * the pointer acts as a magnifying lantern and clicks send ripples.
+ * The print is sampled into a fine glyph grid (see grid.ts). At runtime a
+ * fragment shader draws that grid from a glyph atlas while the water flows,
+ * the foam glitters, the pointer acts as a magnifying lantern and clicks send
+ * ripples.
+ *
+ * Without WebGL (old devices, hardware acceleration off, a lost GPU context)
+ * the same grid is drawn once as a still 2D frame. Markers, the camera and the
+ * wiki keep working either way.
  */
-
-const SRC = "/kanagawa/great-wave.webp";
-const BX = 4; // sample bins per cell, horizontally
-const BY = 8; // ... and vertically
-const NB = BX * BY;
-const LEVELS = 6;
-
-// Kanagawa (wave) palette, as used by kanagawa.nvim.
-const BG = [0x1f, 0x1f, 0x28];
-const BASE = [
-  "#dcd7ba", // fujiWhite
-  "#c8c093", // oldWhite
-  "#a3d4d5", // lightBlue
-  "#7fb4ca", // springBlue
-  "#7e9cd8", // crystalBlue
-  "#9cabca", // springViolet2
-  "#938aa9", // springViolet1
-  "#957fb8", // oniViolet
-  "#658594", // dragonBlue
-  "#6a9589", // waveAqua1
-  "#2d4f67", // waveBlue2
-  "#223249", // waveBlue1
-  "#e6c384", // carpYellow
-  "#c0a36e", // boatYellow
-  "#d27e99", // sakuraPink
-  "#e46876", // waveRed
-  "#c34043", // autumnRed
-  "#98bb6c", // springGreen
-  "#717c7c", // katanaGray
-  "#54546d", // sumiInk6
-];
-const H_CARP = BASE.indexOf("#e6c384");
-const H_FOAM = BASE.indexOf("#dcd7ba");
-
-// No bare horizontal bars (- _ =): matched row after row they read as scanlines.
-const GLYPHS =
-  " .'`:;+*!|/\\()<>[]{}ilIrtcxzvunoeaswmOZ0&%#8$@BWMXKNH?7";
-const gl = (c: string) => GLYPHS.indexOf(c);
-// Glyphs without a strong stroke direction: used for flat tones, ordered by ink.
-const RAMP_SET = Array.from(".'`:;,+*xozvc?rsea%&#8$@XKNMWB", gl);
-const SPARK = Array.from("*+`'", gl);
-const SCRAMBLE_FROM = 12; // glyphs from here on are the busy ones
-
-const rgbOf = (h: string) => [1, 3, 5].map((i) => parseInt(h.slice(i, i + 2), 16));
-
-function toLab(r: number, g: number, b: number): [number, number, number] {
-  const f = (c: number) => {
-    c /= 255;
-    return c > 0.04045 ? Math.pow((c + 0.055) / 1.055, 2.4) : c / 12.92;
-  };
-  const R = f(r);
-  const G = f(g);
-  const B = f(b);
-  const q = (t: number) => (t > 0.008856 ? Math.cbrt(t) : 7.787 * t + 16 / 116);
-  const x = q((0.4124 * R + 0.3576 * G + 0.1805 * B) / 0.95047);
-  const y = q(0.2126 * R + 0.7152 * G + 0.0722 * B);
-  const z = q((0.0193 * R + 0.1192 * G + 0.9505 * B) / 1.08883);
-  return [116 * y - 16, 500 * (x - y), 200 * (y - z)];
-}
-
-// Palette: every base colour at LEVELS brightnesses, blended towards the background.
-const PAL_RGB: number[] = [];
-const PAL_LAB: [number, number, number][] = [];
-BASE.forEach((hex) => {
-  const c = rgbOf(hex);
-  for (let l = 0; l < LEVELS; l++) {
-    const f = 0.55 + (0.55 * l) / (LEVELS - 1);
-    const m = c.map((v, i) => Math.min(255, Math.round(v * f + BG[i] * Math.max(0, 1 - f))));
-    PAL_RGB.push(m[0], m[1], m[2]);
-    PAL_LAB.push(toLab(m[0], m[1], m[2]));
-  }
-});
-
-function clamp(v: number, lo = 0, hi = 1) {
-  return Math.min(hi, Math.max(lo, v));
-}
-
-function smooth(a: number, b: number, v: number) {
-  const t = clamp((v - a) / (b - a));
-  return t * t * (3 - 2 * t);
-}
-
-/** Separable box blur, used for a local-contrast (unsharp mask) pass. */
-function boxBlur(src: Float32Array, w: number, h: number, r: number) {
-  const tmp = new Float32Array(src.length);
-  const out = new Float32Array(src.length);
-  const n = 2 * r + 1;
-  for (let y = 0; y < h; y++) {
-    const row = y * w;
-    let acc = 0;
-    for (let x = -r; x <= r; x++) acc += src[row + Math.min(w - 1, Math.max(0, x))];
-    for (let x = 0; x < w; x++) {
-      tmp[row + x] = acc / n;
-      acc += src[row + Math.min(w - 1, x + r + 1)] - src[row + Math.max(0, x - r)];
-    }
-  }
-  for (let x = 0; x < w; x++) {
-    let acc = 0;
-    for (let y = -r; y <= r; y++) acc += tmp[Math.min(h - 1, Math.max(0, y)) * w + x];
-    for (let y = 0; y < h; y++) {
-      out[y * w + x] = acc / n;
-      acc += tmp[Math.min(h - 1, y + r + 1) * w + x] - tmp[Math.max(0, y - r) * w + x];
-    }
-  }
-  return out;
-}
-
-function hash(x: number, y: number, k: number) {
-  const r = Math.sin((x * 12.9898 + y * 78.233 + k * 37.719) * 43758.5453);
-  return r - Math.floor(r);
-}
-
 
 const INTRO = 2.6;
 const LENS = 15; // lantern radius, in (square) cells
-const NG = GLYPHS.length;
-const NC = PAL_RGB.length / 3;
 
 type Ripple = { x: number; y: number; t0: number };
 
@@ -271,12 +175,60 @@ type Props = {
   onSelect: (id: string) => void;
 };
 
+type View = { gc: number; gr: number; vc: number; vr: number; vx: number; vy: number; cw: number; ch: number; dpr: number };
+
+const noopSubscribe = () => () => {};
+let webglOk: boolean | undefined;
+
+/** Can this browser make a WebGL context at all? Cached; assumed true on the server. */
+function supportsWebGL() {
+  if (webglOk === undefined) {
+    try {
+      webglOk = !!document.createElement("canvas").getContext("webgl");
+    } catch {
+      webglOk = false;
+    }
+  }
+  return webglOk;
+}
+
+/** Where the camera wants to be to show a spot: fractions 0..1 of the free pan range. */
+function cameraFor(spot: Spot, g: Pick<Grid, "gc" | "gr" | "vc" | "vr">, narrow: boolean) {
+  const gx = spot.u * g.gc;
+  const gy = spot.v * g.gr;
+  return {
+    gx,
+    gy,
+    tx: g.gc > g.vc ? clamp((gx - g.vc * (narrow ? 0.5 : 0.34)) / (g.gc - g.vc)) : null,
+    ty: g.gr > g.vr ? clamp((gy - g.vr * (narrow ? 0.28 : 0.5)) / (g.gr - g.vr)) : null,
+  };
+}
+
+/** Wiki markers ride along with the picture. */
+function placeMarkers(els: (HTMLButtonElement | null)[], spots: Spot[], v: View, w: number, h: number, shown: number) {
+  spots.forEach((s, i) => {
+    const el = els[i];
+    if (!el) return;
+    const x = ((s.u * v.gc - v.vx + 0.5) * v.cw) / v.dpr;
+    const y = ((s.v * v.gr - v.vy + 0.5) * v.ch) / v.dpr;
+    const on = x > 8 && y > 8 && x < w - 8 && y < h - 8;
+    el.style.transform = `translate(${x}px, ${y}px) translate(-50%, -50%)`;
+    el.style.opacity = on ? String(shown) : "0";
+    el.style.pointerEvents = on && shown > 0.5 ? "auto" : "none";
+  });
+}
+
 export default function KanagawaWave({ hotspots, activeId, onSelect }: Props) {
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const hostRef = useRef<HTMLDivElement>(null);
+  const stillRef = useRef<HTMLImageElement>(null);
   const markerRefs = useRef<(HTMLButtonElement | null)[]>([]);
+  const repaintRef = useRef<(() => void) | null>(null);
   const activeRef = useRef(activeId);
   const hotspotsRef = useRef(hotspots);
+  const [broken, setBroken] = useState(false); // WebGL died after it started
+  const supported = useSyncExternalStore(noopSubscribe, supportsWebGL, () => true);
+  const mode = supported && !broken ? "gl" : "static";
 
   useEffect(() => {
     activeRef.current = activeId;
@@ -285,11 +237,18 @@ export default function KanagawaWave({ hotspots, activeId, onSelect }: Props) {
     hotspotsRef.current = hotspots;
   }, [hotspots]);
 
+  // WebGL: animated.
   useEffect(() => {
+    if (mode !== "gl") return;
     const canvas = canvasRef.current;
     const host = hostRef.current;
     const gl = canvas?.getContext("webgl", { antialias: false, alpha: true, premultipliedAlpha: true });
-    if (!canvas || !host || !gl) return;
+    if (!canvas || !host) return;
+    // The browser said yes earlier but refuses now (or the shader will not link): use the still.
+    const giveUp = () => {
+      window.setTimeout(() => setBroken(true), 0);
+    };
+    if (!gl) return giveUp();
 
     const reduced = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
     const pointer = { x: 0, y: 0, active: false };
@@ -300,8 +259,6 @@ export default function KanagawaWave({ hotspots, activeId, onSelect }: Props) {
     let ready = false;
     let family = "monospace";
     let dpr = 1;
-    let Wd = 0; // canvas size in device pixels
-    let Hd = 0;
     let cw = 8; // cell size in device pixels
     let ch = 16;
     let gc = 0; // grid size (whole picture, in cells)
@@ -325,7 +282,7 @@ export default function KanagawaWave({ hotspots, activeId, onSelect }: Props) {
     gl.linkProgram(prog);
     if (!gl.getProgramParameter(prog, gl.LINK_STATUS)) {
       console.error(gl.getProgramInfoLog(prog));
-      return;
+      return giveUp();
     }
     gl.useProgram(prog);
     const quad = gl.createBuffer();
@@ -358,38 +315,6 @@ export default function KanagawaWave({ hotspots, activeId, onSelect }: Props) {
     gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGB, NC, 1, 0, gl.RGB, gl.UNSIGNED_BYTE, new Uint8Array(PAL_RGB));
     gl.uniform4f(U("uSpark"), SPARK[0], SPARK[1], SPARK[2], SPARK[3]);
 
-    /** Ink pattern of every glyph, as a BXxBY grid of coverage values. */
-    const glyphShapes = (fontSize: number) => {
-      const k = 4;
-      const c = document.createElement("canvas");
-      c.width = cw * k;
-      c.height = ch * k;
-      const g = c.getContext("2d", { willReadFrequently: true });
-      const out = new Float32Array(NG * NB);
-      if (!g) return out;
-      g.font = `600 ${fontSize * k}px ${family}`;
-      g.textAlign = "center";
-      g.textBaseline = "middle";
-      const bw = (cw * k) / BX;
-      const bh = (ch * k) / BY;
-      for (let i = 1; i < NG; i++) {
-        g.clearRect(0, 0, c.width, c.height);
-        g.fillStyle = "#fff";
-        g.fillText(GLYPHS[i], c.width / 2, c.height / 2 + k);
-        const d = g.getImageData(0, 0, c.width, c.height).data;
-        for (let by = 0; by < BY; by++) {
-          for (let bx = 0; bx < BX; bx++) {
-            let s = 0;
-            for (let y = 0; y < bh; y++) {
-              for (let x = 0; x < bw; x++) s += d[((by * bh + y) * c.width + bx * bw + x) * 4 + 3];
-            }
-            out[i * NB + by * BX + bx] = s / (bw * bh * 255);
-          }
-        }
-      }
-      return out;
-    };
-
     const uploadAtlas = (fontSize: number) => {
       const a = document.createElement("canvas");
       a.width = NG * cw;
@@ -406,161 +331,24 @@ export default function KanagawaWave({ hotspots, activeId, onSelect }: Props) {
       gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA, gl.RGBA, gl.UNSIGNED_BYTE, a);
     };
 
-    /** Sample the print into the glyph grid. Runs on load and on resize. */
+    /** Sample the print into the glyph grid and upload it. Runs on load and on resize. */
     const build = () => {
       dpr = Math.min(window.devicePixelRatio || 1, 2);
-      Wd = Math.floor(canvas.clientWidth * dpr);
-      Hd = Math.floor(canvas.clientHeight * dpr);
+      const Wd = Math.floor(canvas.clientWidth * dpr);
+      const Hd = Math.floor(canvas.clientHeight * dpr);
       if (!Wd || !Hd) return;
       canvas.width = Wd;
       canvas.height = Hd;
       gl.viewport(0, 0, Wd, Hd);
 
-      cw = clamp(Math.ceil(Wd / 360), 4, 14);
-      ch = cw * 2;
-      const fontSize = cw / 0.58;
-      vc = Math.ceil(Wd / cw);
-      vr = Math.ceil(Hd / ch);
-      // A little oversize, so the camera has room to pan and to clear the wiki panel.
-      const scale = Math.max(Wd / img.naturalWidth, Hd / img.naturalHeight) * 1.14;
-      gc = Math.max(vc, Math.ceil((img.naturalWidth * scale) / cw));
-      gr = Math.max(vr, Math.ceil((img.naturalHeight * scale) / ch));
-
-      const shapes = glyphShapes(fontSize);
-      let dmax = 0;
-      const g2 = new Float32Array(NG);
-      const avg = new Float32Array(NG);
-      for (let j = 0; j < NG; j++) {
-        let sum = 0;
-        for (let i = 0; i < NB; i++) {
-          const v = shapes[j * NB + i];
-          sum += v;
-          g2[j] += v * v;
-        }
-        avg[j] = sum / NB;
-        dmax = Math.max(dmax, avg[j]);
-      }
-      const tScale = Math.min(1, dmax * 1.15);
-      const ramp = RAMP_SET.map((j) => ({ j, c: avg[j] })).sort((a, b) => a.c - b.c);
-
-      const off = document.createElement("canvas");
-      off.width = gc * BX;
-      off.height = gr * BY;
-      const o = off.getContext("2d", { willReadFrequently: true });
-      if (!o) return;
-      o.imageSmoothingQuality = "high";
-      o.drawImage(img, 0, 0, off.width, off.height);
-      const px = o.getImageData(0, 0, off.width, off.height).data;
-
-      const pw = off.width;
-      const lumAll = new Float32Array(pw * off.height);
-      for (let i = 0; i < lumAll.length; i++) {
-        lumAll[i] = (0.2126 * px[i * 4] + 0.7152 * px[i * 4 + 1] + 0.0722 * px[i * 4 + 2]) / 255;
-      }
-      const blurred = boxBlur(lumAll, pw, off.height, 6);
-
-      const cells = new Uint8Array(gc * gr * 4);
-      const T = new Float32Array(NB);
-      const stride = off.width * 4;
-
-      for (let cy = 0; cy < gr; cy++) {
-        for (let cx = 0; cx < gc; cx++) {
-          const i = (cy * gc + cx) * 4;
-          cells[i + 3] = 100;
-          let sv = 0;
-          let sr = 0;
-          let sg = 0;
-          let sb = 0;
-          let sl = 0;
-          let mv = 0;
-          for (let by = 0; by < BY; by++) {
-            for (let bx = 0; bx < BX; bx++) {
-              const p = (cy * BY + by) * stride + (cx * BX + bx) * 4;
-              const r = px[p] / 255;
-              const g = px[p + 1] / 255;
-              const b = px[p + 2] / 255;
-              const li = (cy * BY + by) * pw + cx * BX + bx;
-              const lum = clamp(lumAll[li] + 1.1 * (lumAll[li] - blurred[li]));
-              // Lift the darks so the indigo stays visible on a dark page, and
-              // quieten the cream paper so the wave and foam carry the picture.
-              const warm = r - b;
-              const paper = smooth(0.05, 0.15, warm);
-              const v = (0.08 + 0.92 * Math.pow(lum, 2.4)) * (1 - 0.7 * paper);
-              T[by * BX + bx] = v * tScale;
-              sv += v;
-              sr += v * r;
-              sg += v * g;
-              sb += v * b;
-              sl += lum;
-              if (v > mv) mv = v;
-            }
-          }
-          if (sv / NB < 0.06) continue;
-
-          const mean = (sv / NB) * tScale;
-          let spread = 0;
-          for (let k = 0; k < NB; k++) spread += Math.abs(T[k] - mean);
-          spread /= NB;
-
-          let best = 0;
-          let bestScore = Infinity;
-          if (spread < 0.08) {
-            // Flat tone: pick from the isotropic ramp, jittered so it never bands.
-            const want = mean + (hash(cx, cy, 4) - 0.5) * 0.12;
-            for (const r of ramp) {
-              const d = Math.abs(r.c - want);
-              if (d < bestScore) {
-                bestScore = d;
-                best = r.j;
-              }
-            }
-          } else {
-            // Detail (outlines, foam edges): match the actual stroke shape.
-            const dither = (hash(cx, cy, 1) - 0.5) * 0.05;
-            for (let k = 0; k < NB; k++) T[k] = clamp(T[k] + dither * (0.5 + hash(cx * 7 + k, cy, 2)));
-            for (let j = 1; j < NG; j++) {
-              let dot = 0;
-              const base = j * NB;
-              for (let k = 0; k < NB; k++) dot += shapes[base + k] * T[k];
-              const score = g2[j] - 2 * dot;
-              if (score < bestScore) {
-                bestScore = score;
-                best = j;
-              }
-            }
-          }
-          cells[i] = best;
-
-          // Colour: keep the cell's hue, normalise its brightness, then snap to Kanagawa.
-          const m = Math.max(sr, sg, sb) || 1;
-          const bf = 0.85 + 0.15 * clamp(mv);
-          const nr = sr / m;
-          const ng = sg / m;
-          const nb = sb / m;
-          const gray = (nr + ng + nb) / 3;
-          // Push saturation so snapping to the palette keeps the indigo / cream split.
-          const sat = (c: number) => clamp(gray + (c - gray) * 1.8) * bf * 255;
-          const L = toLab(sat(nr), sat(ng), sat(nb));
-          let pi = 0;
-          let pd = Infinity;
-          for (let k = 0; k < PAL_LAB.length; k++) {
-            const d = (L[0] - PAL_LAB[k][0]) ** 2 + (L[1] - PAL_LAB[k][1]) ** 2 + (L[2] - PAL_LAB[k][2]) ** 2;
-            if (d < pd) {
-              pd = d;
-              pi = k;
-            }
-          }
-          cells[i + 1] = Math.floor(pi / LEVELS);
-          cells[i + 2] = pi % LEVELS;
-          const warmCell = sr / sv - sb / sv > 0.06;
-          cells[i + 3] = 100 + (warmCell ? 0 : sl / NB > 0.62 ? 2 : 1);
-        }
-      }
+      const g = sampleGrid(img, Wd, Hd, family);
+      if (!g) return;
+      ({ cw, ch, gc, gr, vc, vr } = g);
 
       gl.activeTexture(gl.TEXTURE0);
       gl.bindTexture(gl.TEXTURE_2D, dataTex);
-      gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA, gc, gr, 0, gl.RGBA, gl.UNSIGNED_BYTE, cells);
-      uploadAtlas(fontSize);
+      gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA, gc, gr, 0, gl.RGBA, gl.UNSIGNED_BYTE, g.cells);
+      uploadAtlas(g.fontSize);
       gl.uniform2f(U("uRes"), Wd, Hd);
       gl.uniform2f(U("uCell"), cw, ch);
       gl.uniform2f(U("uGrid"), gc, gr);
@@ -576,20 +364,18 @@ export default function KanagawaWave({ hotspots, activeId, onSelect }: Props) {
       // Camera: the pointer pans around the print; otherwise it drifts gently.
       // Picking a wiki spot flies the camera to it instead.
       const spot = hotspotsRef.current.find((h) => h.id === activeRef.current);
-      const narrow = canvas.clientWidth < 900;
       let tx = pointer.active ? pointer.x / canvas.clientWidth : 0.42 + 0.14 * Math.sin(t * 0.05);
       let ty = pointer.active ? 0.15 + 0.7 * (pointer.y / canvas.clientHeight) : 0.25;
       if (spot) {
-        const gx = spot.u * gc;
-        const gy = spot.v * gr;
-        if (gc > vc) tx = clamp((gx - vc * (narrow ? 0.5 : 0.34)) / (gc - vc));
-        if (gr > vr) ty = clamp((gy - vr * (narrow ? 0.28 : 0.5)) / (gr - vr));
+        const cam = cameraFor(spot, { gc, gr, vc, vr }, canvas.clientWidth < 900);
+        if (cam.tx !== null) tx = cam.tx;
+        if (cam.ty !== null) ty = cam.ty;
         if (focus.amt < 0.02) {
-          focus.x = gx;
-          focus.y = gy;
+          focus.x = cam.gx;
+          focus.y = cam.gy;
         }
-        focus.x += (gx - focus.x) * 0.12;
-        focus.y += (gy - focus.y) * 0.12;
+        focus.x += (cam.gx - focus.x) * 0.12;
+        focus.y += (cam.gy - focus.y) * 0.12;
         focus.r += (spot.r * gc - focus.r) * 0.12;
       }
       focus.amt += ((spot ? 1 : 0) - focus.amt) * 0.08;
@@ -607,18 +393,14 @@ export default function KanagawaWave({ hotspots, activeId, onSelect }: Props) {
       gl.uniform1f(U("uFocusR"), focus.r);
       gl.uniform1f(U("uFocusAmt"), focus.amt);
 
-      // Wiki markers ride along with the picture.
-      const shown = clamp((t - INTRO) / 0.8);
-      hotspotsRef.current.forEach((h, i) => {
-        const el = markerRefs.current[i];
-        if (!el) return;
-        const x = ((h.u * gc - vx + 0.5) * cw) / dpr;
-        const y = ((h.v * gr - vy + 0.5) * ch) / dpr;
-        const on = x > 8 && y > 8 && x < canvas.clientWidth - 8 && y < canvas.clientHeight - 8;
-        el.style.transform = `translate(${x}px, ${y}px) translate(-50%, -50%)`;
-        el.style.opacity = on ? String(shown) : "0";
-        el.style.pointerEvents = on && shown > 0.5 ? "auto" : "none";
-      });
+      placeMarkers(
+        markerRefs.current,
+        hotspotsRef.current,
+        { gc, gr, vc, vr, vx, vy, cw, ch, dpr },
+        canvas.clientWidth,
+        canvas.clientHeight,
+        clamp((t - INTRO) / 0.8),
+      );
       gl.uniform2f(U("uPtr"), (pointer.x * dpr) / cw, (pointer.y * dpr) / ch);
       gl.uniform1f(U("uActive"), pointer.active ? 1 : 0);
       gl.uniform1f(U("uTime"), t);
@@ -643,6 +425,11 @@ export default function KanagawaWave({ hotspots, activeId, onSelect }: Props) {
       onMove(e);
       ripples.push({ x: (pointer.x * dpr) / cw, y: (pointer.y * dpr) / ch, t0: (performance.now() - start) / 1000 });
       if (ripples.length > 4) ripples.shift();
+    };
+    // The GPU took the context away: fall back to the still instead of freezing.
+    const onLost = (e: Event) => {
+      e.preventDefault();
+      setBroken(true);
     };
 
     const rebuildSoon = () => {
@@ -671,6 +458,7 @@ export default function KanagawaWave({ hotspots, activeId, onSelect }: Props) {
     host.addEventListener("pointermove", onMove, { passive: true });
     host.addEventListener("pointerdown", onDown);
     host.addEventListener("pointerleave", onLeave);
+    canvas.addEventListener("webglcontextlost", onLost);
 
     return () => {
       disposed = true;
@@ -680,14 +468,108 @@ export default function KanagawaWave({ hotspots, activeId, onSelect }: Props) {
       host.removeEventListener("pointermove", onMove);
       host.removeEventListener("pointerdown", onDown);
       host.removeEventListener("pointerleave", onLeave);
+      canvas.removeEventListener("webglcontextlost", onLost);
     };
-  }, []);
+  }, [mode]);
+
+  // No WebGL: one still frame, redrawn when the window resizes or a wiki spot is picked.
+  useEffect(() => {
+    if (mode !== "static") return;
+    const canvas = canvasRef.current;
+    const ctx = canvas?.getContext("2d");
+    if (!canvas || !ctx) return;
+
+    const img = new Image();
+    let grid: Grid | null = null;
+    let family = "monospace";
+    let dpr = 1;
+    let disposed = false;
+    let timer = 0;
+    const pan = { x: 0.42, y: 0.25 };
+
+    const paint = () => {
+      if (!grid) return;
+      const spot = hotspotsRef.current.find((h) => h.id === activeRef.current);
+      if (spot) {
+        const cam = cameraFor(spot, grid, canvas.clientWidth < 900);
+        if (cam.tx !== null) pan.x = cam.tx;
+        if (cam.ty !== null) pan.y = cam.ty;
+      }
+      const vx = Math.round((grid.gc - grid.vc) * clamp(pan.x));
+      const vy = Math.round((grid.gr - grid.vr) * clamp(pan.y));
+      drawStatic(ctx, grid, vx, vy, family);
+      stillRef.current?.style.setProperty("display", "none");
+      placeMarkers(
+        markerRefs.current,
+        hotspotsRef.current,
+        { ...grid, vx, vy, dpr },
+        canvas.clientWidth,
+        canvas.clientHeight,
+        1,
+      );
+    };
+
+    repaintRef.current = paint;
+
+    const build = () => {
+      dpr = Math.min(window.devicePixelRatio || 1, 2);
+      const Wd = Math.floor(canvas.clientWidth * dpr);
+      const Hd = Math.floor(canvas.clientHeight * dpr);
+      if (!Wd || !Hd) return;
+      canvas.width = Wd;
+      canvas.height = Hd;
+      try {
+        grid = sampleGrid(img, Wd, Hd, family);
+        paint();
+      } catch {
+        grid = null; // keep the plain image showing
+      }
+    };
+
+    img.onload = () => {
+      family = getComputedStyle(canvas).getPropertyValue("--font-geist-mono").trim() || "monospace";
+      document.fonts.ready.then(() => {
+        if (!disposed) build();
+      });
+    };
+    img.src = SRC;
+
+    const ro = new ResizeObserver(() => {
+      window.clearTimeout(timer);
+      timer = window.setTimeout(() => {
+        if (!disposed && img.complete) build();
+      }, 150);
+    });
+    ro.observe(canvas);
+
+    return () => {
+      disposed = true;
+      repaintRef.current = null;
+      window.clearTimeout(timer);
+      ro.disconnect();
+    };
+  }, [mode]);
+
+  // Repaint the still when the chosen spot changes.
+  useEffect(() => {
+    if (mode !== "static") return;
+    repaintRef.current?.();
+  }, [mode, activeId]);
 
   return (
     <div ref={hostRef} className="absolute inset-0 touch-none overflow-hidden">
+      {mode === "static" && (
+        <img
+          ref={stillRef}
+          src={SRC}
+          alt=""
+          className="absolute inset-0 h-full w-full object-cover opacity-40"
+        />
+      )}
       <canvas
+        key={mode}
         ref={canvasRef}
-        aria-label="The Great Wave off Kanagawa by Hokusai, drawn in animated ASCII"
+        aria-label="The Great Wave off Kanagawa by Hokusai, drawn in ASCII"
         role="img"
         className="absolute inset-0 h-full w-full"
       />
