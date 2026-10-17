@@ -91,6 +91,15 @@ export const C = {
   nav6: { en: "People", id: "Manusia" },
   nav7: { en: "You", id: "Kamu" },
 
+  manifesto: {
+    en: "A hotspot is not a fire. It is a warning. And most of the story happens long before the flames.",
+    id: "Titik panas bukan api. Ia adalah peringatan. Dan sebagian besar ceritanya terjadi jauh sebelum api menyala.",
+  },
+  fig1: { en: "Fig. 1 · One satellite pass over a 12 × 7 patch of land. Values are illustrative.", id: "Gambar 1 · Satu lintasan satelit di atas petak 12 × 7. Nilai bersifat ilustrasi." },
+  fig2: { en: "Fig. 2 · Hotspots by confidence, 4 Oct 2026.", id: "Gambar 2 · Titik panas menurut keyakinan, 4 Okt 2026." },
+  fig3: { en: "Fig. 3 · Smoke routes in the dry-season wind. Schematic.", id: "Gambar 3 · Jalur asap dalam angin musim kemarau. Skematis." },
+  step: { en: "Step", id: "Langkah" },
+
   // 1 · hero
   heroKicker: { en: "Karhutla · Indonesia · dry season 2026", id: "Karhutla · Indonesia · kemarau 2026" },
   heroTitle: { en: "The fire is the last chapter.", id: "Api hanyalah bab terakhir." },
@@ -106,7 +115,7 @@ export const C = {
   },
 
   // 2 · hotspot
-  c2Kicker: { en: "Chapter 1 · What is a hotspot?", id: "Bab 1 · Apa itu titik panas?" },
+  c2Kicker: { en: "What is a hotspot?", id: "Apa itu titik panas?" },
   c2Title: { en: "A pixel that runs hot.", id: "Sebuah piksel yang terlalu panas." },
   c2Body: {
     en: "A satellite sweeps the land in a grid of small pixels and measures heat from each one. A pixel far hotter than its neighbours becomes a hotspot. That is all it is: a heat anomaly. The Ministry of Forestry says it cannot be equated with a single fire, or with area burned.",
@@ -134,7 +143,7 @@ export const C = {
   conf_c_d: { en: "Normal ground temperature. Nothing to flag.", id: "Suhu tanah normal. Tidak ada yang ditandai." },
 
   // 3 · map
-  c3Kicker: { en: "Chapter 2 · Where it burns", id: "Bab 2 · Di mana api membara" },
+  c3Kicker: { en: "Where it burns", id: "Di mana api membara" },
   c3Title: { en: "One province carried the day.", id: "Satu provinsi memikul hari itu." },
   c3Body: {
     en: "On 20 September, Central Kalimantan alone held 11,011 of the 20,802 hotspots in the country. Most of the dots below are medium confidence: the satellite is suspicious, not certain.",
@@ -155,7 +164,7 @@ export const C = {
   lblPap: { en: "Papua", id: "Papua" },
 
   // 4 · peat
-  c4Kicker: { en: "Chapter 3 · Why there", id: "Bab 3 · Mengapa di sana" },
+  c4Kicker: { en: "Why there", id: "Mengapa di sana" },
   c4Title: { en: "It burns from below.", id: "Ia terbakar dari bawah." },
   c4Hint: { en: "Scroll to move the story. The model is a cutaway, not to scale.", id: "Gulir untuk menggerakkan cerita. Model berupa potongan, tidak berskala." },
   p1T: { en: "A swamp that behaves like a sponge", id: "Rawa yang bekerja seperti spons" },
@@ -206,7 +215,7 @@ export const C = {
   },
 
   // 5 · smoke
-  c5Kicker: { en: "Chapter 4 · The smoke travels", id: "Bab 4 · Asap menjalar" },
+  c5Kicker: { en: "The smoke travels", id: "Asap menjalar" },
   c5Title: { en: "The haze doesn't stop at the border.", id: "Kabut asap tidak berhenti di perbatasan." },
   c5Body: {
     en: "In the dry season the prevailing wind over Sumatra and Kalimantan blows from the south-east, carrying smoke towards the Malacca Strait, the Malay Peninsula and Singapore. Peat smoke is rich in PM2.5, particles small enough to reach deep into the lungs.",
@@ -244,7 +253,7 @@ export const C = {
   },
 
   // 6 · people
-  c6Kicker: { en: "Chapter 5 · The people in it", id: "Bab 5 · Orang-orang di dalamnya" },
+  c6Kicker: { en: "The people in it", id: "Orang-orang di dalamnya" },
   c6Title: { en: "A day inside the haze.", id: "Sehari di dalam kabut." },
   c6Note: {
     en: "Illustrative composites. These are not real people or quotes; they show situations that fire seasons create.",
@@ -267,7 +276,7 @@ export const C = {
   },
 
   // 7 · action
-  c7Kicker: { en: "Chapter 6 · What you can do", id: "Bab 6 · Yang bisa kamu lakukan" },
+  c7Kicker: { en: "What you can do", id: "Yang bisa kamu lakukan" },
   c7Title: { en: "You can't put out peat. You can change the odds.", id: "Kamu tak bisa memadamkan gambut. Tapi kamu bisa mengubah peluangnya." },
   a1T: { en: "Stay safe", id: "Jaga diri" },
   a1B: {
@@ -405,7 +414,7 @@ function makeDots(): Dot[] {
 export const DOTS: Dot[] = makeDots();
 export const DOT_WEIGHT = Math.round(FIGURES.latest / DOTS.length);
 
-export const CONF_COLOR: Record<Conf, string> = { h: "#ff4d1c", n: "#ffb347", l: "#9aa7b4" };
+export const CONF_COLOR: Record<Conf, string> = { h: "#d93a0b", n: "#e0992b", l: "#8a8f95" };
 
 /** ISPU bands (Indonesian air standard index). */
 export const ISPU = [

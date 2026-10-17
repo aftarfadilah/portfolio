@@ -3,7 +3,7 @@
 import { AnimatePresence, motion, useInView, useMotionValueEvent, useReducedMotion, useScroll } from "framer-motion";
 import dynamic from "next/dynamic";
 import { useRef, useState, useSyncExternalStore, type RefObject } from "react";
-import { Heading, type T } from "./shared";
+import { ChapterHead, serif, type T } from "./shared";
 
 const PeatScene = dynamic(() => import("./PeatScene"), { ssr: false });
 
@@ -39,53 +39,44 @@ export default function PeatChapter({ t, scroller }: { t: T; scroller: RefObject
   const [title, body] = STEPS[step];
 
   return (
-    <section id="ch-3" ref={section} className="relative h-[420vh]">
+    <section data-ch="3" id="ch-3" ref={section} className="relative h-[420vh] bg-[#1d3248] text-[#f1ece3]">
       <div className="sticky top-0 h-screen overflow-hidden">
-        <div className="absolute inset-0 bg-[#1d3248]">
-          {gl && <PeatScene progress={scrollYProgress} active={near} still={reduced} />}
-        </div>
-        <div className="pointer-events-none absolute inset-0 bg-gradient-to-t from-black/70 via-transparent to-black/40" />
+        <div className="absolute inset-0">{gl && <PeatScene progress={scrollYProgress} active={near} still={reduced} />}</div>
+        <div className="pointer-events-none absolute inset-0 bg-gradient-to-b from-ink/70 via-transparent to-ink/85" />
 
-        <div className="relative z-10 mx-auto flex h-full max-w-6xl flex-col justify-between px-6 pb-6 pt-20 sm:pb-10 sm:pt-24">
-          <Heading kicker={t("c4Kicker")} title={t("c4Title")} />
+        <div className="relative z-10 mx-auto flex h-full max-w-7xl flex-col justify-between px-6 pb-8 pt-20 sm:px-10 sm:pb-12 sm:pt-24">
+          <ChapterHead n={3} kicker={t("c4Kicker")} title={t("c4Title")} />
 
-          <div className="flex flex-col items-start justify-between gap-6 lg:flex-row lg:items-end">
-            <div className="max-w-md rounded-2xl border border-white/15 bg-black/60 p-4 backdrop-blur-md sm:p-6" aria-live="polite">
-              <p className="font-mono text-[11px] uppercase tracking-widest text-orange-300">
-                {step + 1} / {STEPS.length}
-              </p>
+          <div className="flex flex-col justify-between gap-6 lg:flex-row lg:items-end">
+            <div className="max-w-xl" aria-live="polite">
+              <div className="flex gap-1.5" aria-hidden="true">
+                {STEPS.map((_, i) => (
+                  <span key={i} className={`h-[3px] w-10 transition-colors duration-300 ${i <= step ? "bg-ember" : "bg-white/25"}`} />
+                ))}
+              </div>
               <AnimatePresence mode="wait">
-                <motion.div
-                  key={step}
-                  initial={{ opacity: 0, y: 10 }}
-                  animate={{ opacity: 1, y: 0 }}
-                  exit={{ opacity: 0, y: -10 }}
-                  transition={{ duration: 0.25 }}
-                >
-                  <h3 className="mt-2 text-xl font-semibold text-white sm:text-2xl">{t(title)}</h3>
-                  <p className="mt-2 text-sm leading-relaxed text-stone-200 sm:mt-3 sm:text-base">{t(body)}</p>
+                <motion.div key={step} initial={{ opacity: 0, y: 12 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: -8 }} transition={{ duration: 0.25 }}>
+                  <h3 className={`${serif} mt-4 text-3xl leading-tight sm:text-5xl`}>{t(title)}</h3>
+                  <p className="mt-3 text-sm leading-relaxed opacity-85 sm:text-base">{t(body)}</p>
                 </motion.div>
               </AnimatePresence>
               {!gl && <p className="mt-4 text-sm text-amber-200">{t("noGl")}</p>}
             </div>
 
-            <div className="hidden rounded-xl border border-white/15 bg-black/55 p-4 text-sm text-stone-200 backdrop-blur-md sm:block">
-              <ul className="space-y-2">
-                <li className="flex items-center gap-2">
-                  <span className="h-1 w-6 rounded bg-[#5ec8ff]" />
-                  {t("legWater")}
-                </li>
-                <li className="flex items-center gap-2">
-                  <span className="h-3 w-6 rounded bg-[#4a3622]" />
-                  {t("legPeat")}
-                </li>
-                <li className="flex items-center gap-2">
-                  <span className="h-3 w-6 rounded bg-gradient-to-r from-[#3a0d03] via-[#ff6a1f] to-[#ffd27a]" />
-                  {t("legFire")}
-                </li>
-              </ul>
-              <p className="mt-3 max-w-[16rem] text-xs text-stone-400">{t("c4Hint")}</p>
-            </div>
+            <ul className="hidden gap-x-6 text-xs opacity-80 sm:flex lg:flex-col lg:gap-y-2">
+              <li className="flex items-center gap-2">
+                <span className="h-[3px] w-5 bg-[#5ec8ff]" />
+                {t("legWater")}
+              </li>
+              <li className="flex items-center gap-2">
+                <span className="h-3 w-5 bg-[#7a5a3a]" />
+                {t("legPeat")}
+              </li>
+              <li className="flex items-center gap-2">
+                <span className="h-3 w-5 bg-gradient-to-r from-[#3a0d03] via-[#ff6a1f] to-[#ffd27a]" />
+                {t("legFire")}
+              </li>
+            </ul>
           </div>
         </div>
       </div>

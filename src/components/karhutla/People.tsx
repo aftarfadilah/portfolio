@@ -1,8 +1,8 @@
 "use client";
 
-import { motion } from "framer-motion";
-import type { ReactNode } from "react";
-import { Heading, type T } from "./shared";
+import { motion, useScroll, useTransform, type MotionValue } from "framer-motion";
+import { useRef, type ReactNode } from "react";
+import { ChapterHead, serif, useScroller, type T } from "./shared";
 
 // Three small SVG scenes. They are composites, not portraits of real people.
 
@@ -93,34 +93,47 @@ function Farmer() {
 }
 
 const SCENES = [
-  { Scene: Volunteer, title: "pe1T", body: "pe1B" },
-  { Scene: Student, title: "pe2T", body: "pe2B" },
-  { Scene: Farmer, title: "pe3T", body: "pe3B" },
+  { Scene: Volunteer, title: "pe1T", body: "pe1B", roman: "i." },
+  { Scene: Student, title: "pe2T", body: "pe2B", roman: "ii." },
+  { Scene: Farmer, title: "pe3T", body: "pe3B", roman: "iii." },
 ] as const;
 
-export default function People({ t }: { t: T }) {
+/** Cards pin to the top and shrink as the next one slides over them. */
+function StackCard({ i, n, p, t }: { i: number; n: number; p: MotionValue<number>; t: T }) {
+  const { Scene, title, body, roman } = SCENES[i];
+  const scale = useTransform(p, [i / n, 1], [1, 1 - (n - 1 - i) * 0.045]);
   return (
-    <section id="ch-5" className="mx-auto max-w-6xl px-6 py-28">
-      <Heading kicker={t("c6Kicker")} title={t("c6Title")} />
-      <div className="mt-12 grid gap-6 md:grid-cols-3">
-        {SCENES.map(({ Scene, title, body }, i) => (
-          <motion.article
-            key={title}
-            initial={{ opacity: 0, y: 28 }}
-            whileInView={{ opacity: 1, y: 0 }}
-            viewport={{ once: true, amount: 0.3 }}
-            transition={{ duration: 0.6, delay: i * 0.12 }}
-            className="overflow-hidden rounded-2xl border border-white/10 bg-white/[0.03]"
-          >
-            <Scene />
-            <div className="p-5">
-              <h3 className="text-lg font-medium text-white">{t(title)}</h3>
-              <p className="mt-2 text-sm leading-relaxed text-stone-300">{t(body)}</p>
-            </div>
-          </motion.article>
-        ))}
+    <div className={`md:sticky ${i < n - 1 ? "md:mb-[28vh]" : ""}`} style={{ top: 96 + i * 26 }}>
+      <motion.article style={{ scale }} className="grid origin-top overflow-hidden border border-ink/15 bg-paper-2 md:grid-cols-2">
+        <div className="[&_svg]:h-full [&_svg]:w-full [&_svg]:object-cover">
+          <Scene />
+        </div>
+        <div className="flex flex-col justify-center p-8 sm:p-12">
+          <p className={`${serif} text-5xl italic text-ember`}>{roman}</p>
+          <h3 className={`${serif} mt-4 text-3xl leading-tight sm:text-5xl`}>{t(title)}</h3>
+          <p className="mt-4 max-w-md text-sm leading-relaxed opacity-75 sm:text-base">{t(body)}</p>
+        </div>
+      </motion.article>
+    </div>
+  );
+}
+
+export default function People({ t }: { t: T }) {
+  const wrap = useRef<HTMLDivElement>(null);
+  const scroller = useScroller();
+  const { scrollYProgress } = useScroll({ target: wrap, container: scroller ?? undefined, offset: ["start 0.6", "end end"] });
+
+  return (
+    <section data-ch="5" id="ch-5" className="border-t border-ink/15 bg-paper text-ink">
+      <div className="mx-auto max-w-7xl px-6 py-28 sm:px-10 lg:py-40">
+        <ChapterHead n={5} kicker={t("c6Kicker")} title={t("c6Title")} />
+        <div ref={wrap} className="mt-16 flex flex-col gap-6 md:gap-0">
+          {SCENES.map((_, i) => (
+            <StackCard key={i} i={i} n={SCENES.length} p={scrollYProgress} t={t} />
+          ))}
+        </div>
+        <p className="mt-10 max-w-xl text-xs italic leading-relaxed opacity-60">{t("c6Note")}</p>
       </div>
-      <p className="mt-6 text-xs italic text-stone-500">{t("c6Note")}</p>
     </section>
   );
 }
