@@ -23,6 +23,14 @@
   --color-syntax-keyword: hsl(210 80% 65%);
   --color-syntax-string: hsl(30 80% 60%);
   --color-syntax-function: hsl(50 60% 65%);
+  /* karhutla story */
+  --color-paper: #f1ece3;
+  --color-paper-2: #e6dfd2;
+  --color-ink: #16110e;
+  --color-ink-2: #201a16;
+  --color-ember: #e2410d;
+  --color-rule: #cfc5b3;
+  --color-dim: #6f665c;
 }
 
 html {
