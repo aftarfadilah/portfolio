@@ -1,7 +1,17 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { ENTRIES, HOTSPOTS, type Block, type Entry, type Tone } from "@/data/kanagawa-wiki";
+import {
+  ENTRIES,
+  HOTSPOTS,
+  UI,
+  cols,
+  isWide,
+  type Block,
+  type Entry,
+  type Lang,
+  type Tone,
+} from "@/data/kanagawa-wiki";
 
 const W = 54; // inner width, in characters
 const KEY_W = 10;
@@ -21,18 +31,60 @@ const C = {
   note: "text-[#E6C384]",
 };
 
-/** Greedy word wrap. */
+const NO_BREAK_BEFORE = "、。，．）」』,.;:!?)";
+const padW = (text: string, width: number) => text + " ".repeat(Math.max(0, width - cols(text)));
+
+/** Greedy wrap by display width: Latin breaks at spaces, kanji and kana anywhere. */
 function wrap(text: string, width: number): string[] {
+  const tokens: { t: string; sp: boolean }[] = [];
+  let word = "";
+  let wordSp = false;
+  let sp = false;
+  const flush = () => {
+    if (word) tokens.push({ t: word, sp: wordSp });
+    word = "";
+  };
+  for (const ch of text) {
+    if (ch === " ") {
+      flush();
+      sp = true;
+    } else if (isWide(ch)) {
+      flush();
+      tokens.push({ t: ch, sp });
+      sp = false;
+    } else {
+      if (!word) wordSp = sp;
+      word += ch;
+      sp = false;
+    }
+  }
+  flush();
+
   const out: string[] = [];
   let cur = "";
-  for (const word of text.split(/\s+/)) {
-    if (cur && cur.length + 1 + word.length > width) {
+  for (const tok of tokens) {
+    const gap = tok.sp && cur ? " " : "";
+    if (cur && cols(cur + gap + tok.t) > width && !NO_BREAK_BEFORE.includes(tok.t[0])) {
       out.push(cur);
-      cur = word;
-    } else cur = cur ? `${cur} ${word}` : word;
+      cur = tok.t;
+    } else cur += gap + tok.t;
   }
   if (cur) out.push(cur);
   return out;
+}
+
+/** Kanji and kana are wider than the monospace cell, so pin each to two cells. */
+function renderText(text: string) {
+  if (![...text].some(isWide)) return text;
+  return [...text].map((ch, i) =>
+    isWide(ch) ? (
+      <span key={i} className="inline-block w-[2ch] text-center">
+        {ch}
+      </span>
+    ) : (
+      ch
+    ),
+  );
 }
 
 // Colour classes for art characters.
@@ -51,7 +103,7 @@ const ART = {
 function artLine(line: string, tone: Tone): Line {
   const segs: Seg[] = [];
   for (const ch of line) {
-    const cls = /[A-Za-z0-9]/.test(ch)
+    const cls = /[A-Za-z0-9]/.test(ch) || isWide(ch)
       ? ART.label
       : "~-=_".includes(ch)
         ? ART.water
@@ -65,45 +117,45 @@ function artLine(line: string, tone: Tone): Line {
   return segs;
 }
 
-function blockLines(b: Block): Line[] {
+function blockLines(b: Block, lang: Lang): Line[] {
   switch (b.t) {
     case "art":
       return b.lines.map((l) => artLine(l, b.tone));
     case "h":
-      return [[{ text: `>> ${b.text}`, cls: C.h }]];
+      return [[{ text: `>> ${b.text[lang]}`, cls: C.h }]];
     case "p":
-      return wrap(b.text, W).map((t) => [{ text: t, cls: C.p }]);
+      return wrap(b.text[lang], W).map((t) => [{ text: t, cls: C.p }]);
     case "warn": {
-      const [first, ...rest] = wrap(b.text, W - 4);
+      const [first, ...rest] = wrap(b.text[lang], W - 4);
       return [
         [{ text: "[!] ", cls: C.warn }, { text: first, cls: C.warn }],
         ...rest.map((t) => [{ text: `    ${t}`, cls: C.warn }]),
       ];
     }
     case "quote": {
-      const body = wrap(`"${b.text}"`, W - 2).map((t) => [{ text: `| ${t}`, cls: C.quote }]);
-      const by = wrap(`-- ${b.by}`, W - 2).map((t) => [{ text: `  ${t}`, cls: C.sub }]);
+      const body = wrap(`"${b.text[lang]}"`, W - 2).map((t) => [{ text: `| ${t}`, cls: C.quote }]);
+      const by = wrap(`-- ${b.by[lang]}`, W - 2).map((t) => [{ text: `  ${t}`, cls: C.sub }]);
       return [...body, ...by];
     }
     case "kv":
       return b.rows.flatMap(([k, v]) =>
-        wrap(v, W - KEY_W).map((t, i) => [
-          { text: (i === 0 ? k : "").padEnd(KEY_W), cls: C.key },
+        wrap(v[lang], W - KEY_W).map((t, i) => [
+          { text: padW(i === 0 ? k[lang] : "", KEY_W), cls: C.key },
           { text: t, cls: C.p },
         ]),
       );
   }
 }
 
-function layout(entry: Entry, note?: string): Line[] {
-  const head = `+--[ ${entry.num} :: ${entry.title} ]`;
-  const lines: Line[] = [[{ text: head + "-".repeat(Math.max(2, W + 2 - head.length)), cls: C.title }]];
-  const body: Line[] = [[{ text: entry.sub, cls: C.sub }], []];
+function layout(entry: Entry, lang: Lang, note?: string): Line[] {
+  const head = `+--[ ${entry.num} :: ${entry.title[lang]} ]`;
+  const lines: Line[] = [[{ text: head + "-".repeat(Math.max(2, W + 2 - cols(head))), cls: C.title }]];
+  const body: Line[] = [[{ text: entry.sub[lang], cls: C.sub }], []];
   if (note) {
     body.push(...wrap(note, W).map((t) => [{ text: t, cls: C.note }]), []);
   }
   entry.blocks.forEach((b, i) => {
-    body.push(...blockLines(b));
+    body.push(...blockLines(b, lang));
     if (i < entry.blocks.length - 1) body.push([]);
   });
   for (const l of body) lines.push([{ text: "| ", cls: C.rail }, ...l]);
@@ -141,7 +193,7 @@ function Reveal({ lines }: { lines: Line[] }) {
           ) : (
             line.map((s, j) => (
               <span key={j} className={s.cls}>
-                {s.text}
+                {renderText(s.text)}
               </span>
             ))
           )}
@@ -155,12 +207,14 @@ const button =
   "rounded border border-[#2A2A37] px-1.5 py-0.5 text-[#7E9CD8] transition-colors hover:border-[#7E9CD8] hover:text-[#DCD7BA]";
 
 type Props = {
+  lang: Lang;
   sel: string | null; // a hotspot id, an entry id, or null for the index
   onSelect: (id: string | null) => void;
   onClose: () => void;
 };
 
-export default function WikiPanel({ sel, onSelect, onClose }: Props) {
+export default function WikiPanel({ lang, sel, onSelect, onClose }: Props) {
+  const ui = UI[lang];
   const hotspot = HOTSPOTS.find((h) => h.id === sel);
   const entry = ENTRIES.find((e) => e.id === (hotspot?.entry ?? sel));
   const idx = entry ? ENTRIES.indexOf(entry) : -1;
@@ -171,35 +225,35 @@ export default function WikiPanel({ sel, onSelect, onClose }: Props) {
 
   return (
     <aside
-      aria-label="Kanagawa wiki"
+      aria-label={ui.panelAria}
       className="absolute inset-x-2 bottom-2 z-20 flex max-h-[56vh] flex-col rounded border border-[#2A2A37] bg-[#16161D]/90 font-mono text-[9px] leading-[1.35] text-[#DCD7BA] backdrop-blur sm:text-[11px] lg:inset-x-auto lg:bottom-4 lg:right-4 lg:top-16 lg:max-h-none lg:w-[440px]"
     >
       <div className="flex items-center gap-1.5 border-b border-[#2A2A37] p-2">
         <button type="button" className={button} onClick={() => onSelect(null)}>
-          index
+          {ui.index}
         </button>
         {entry && (
           <>
-            <button type="button" className={button} onClick={() => go(idx - 1)} aria-label="Previous entry">
-              &lt; prev
+            <button type="button" className={button} onClick={() => go(idx - 1)} aria-label={ui.prevAria}>
+              {ui.prev}
             </button>
-            <button type="button" className={button} onClick={() => go(idx + 1)} aria-label="Next entry">
-              next &gt;
+            <button type="button" className={button} onClick={() => go(idx + 1)} aria-label={ui.nextAria}>
+              {ui.next}
             </button>
           </>
         )}
         <span className="ml-auto" />
-        <button type="button" className={button} onClick={onClose} aria-label="Close wiki">
-          x esc
+        <button type="button" className={button} onClick={onClose} aria-label={ui.closeAria}>
+          {ui.close}
         </button>
       </div>
 
       <div className="overflow-y-auto p-3">
         {entry ? (
           <>
-            <Reveal key={`${entry.id}:${hotspot?.id ?? ""}`} lines={layout(entry, hotspot?.note)} />
+            <Reveal key={`${lang}:${entry.id}:${hotspot?.id ?? ""}`} lines={layout(entry, lang, hotspot?.note?.[lang])} />
             <ul className="mt-3 flex flex-col gap-1 text-[#727169]">
-              <li className="text-[#54546D]">sources</li>
+              <li className="text-[#54546D]">{ui.sources}</li>
               {entry.sources.map((s, i) => (
                 <li key={s.url}>
                   <a
@@ -215,7 +269,7 @@ export default function WikiPanel({ sel, onSelect, onClose }: Props) {
             </ul>
           </>
         ) : (
-          <Index onPick={(id) => onSelect(id)} />
+          <Index lang={lang} onPick={(id) => onSelect(id)} />
         )}
       </div>
     </aside>
@@ -231,7 +285,8 @@ const BANNER = String.raw`
   .replace(/^\n/, "")
   .split("\n");
 
-function Index({ onPick }: { onPick: (id: string) => void }) {
+function Index({ lang, onPick }: { lang: Lang; onPick: (id: string) => void }) {
+  const ui = UI[lang];
   const head = "+--[ KANAGAWA.WIKI ]";
   return (
     <pre className="m-0 whitespace-pre font-[inherit]">
@@ -248,11 +303,11 @@ function Index({ onPick }: { onPick: (id: string) => void }) {
       ))}
       <div>
         <span className={C.rail}>| </span>
-        <span className={C.sub}>The Great Wave off Kanagawa, nine entries.</span>
+        <span className={C.sub}>{renderText(ui.introA)}</span>
       </div>
       <div>
         <span className={C.rail}>| </span>
-        <span className={C.sub}>Click a gold marker on the print, or pick one:</span>
+        <span className={C.sub}>{renderText(ui.introB)}</span>
       </div>
       <div className={C.rail}>|</div>
       <div>
@@ -261,7 +316,6 @@ function Index({ onPick }: { onPick: (id: string) => void }) {
       </div>
       {ENTRIES.map((e, i) => {
         const last = i === ENTRIES.length - 1;
-        const label = `${e.num}  ${e.title}`;
         const id = HOTSPOTS.find((h) => h.entry === e.id)?.id ?? e.id;
         return (
           <button
@@ -273,8 +327,10 @@ function Index({ onPick }: { onPick: (id: string) => void }) {
             <span className={C.rail}>| </span>
             <span className={C.rail}>{last ? " `-- " : " |-- "}</span>
             <span className={C.note}>{e.num}</span>
-            <span className={C.p}>{`  ${label.slice(4)}`.padEnd(22)}</span>
-            <span className={C.sub}>{e.sub.split(" / ")[0]}</span>
+            <span className={C.p}>
+              {renderText(`  ${padW(e.title[lang], 20)}`)}
+            </span>
+            <span className={C.sub}>{renderText(e.sub[lang].split(" / ")[0])}</span>
           </button>
         );
       })}

@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useRef } from "react";
-import type { Hotspot } from "@/data/kanagawa-wiki";
+import type { Spot } from "@/data/kanagawa-wiki";
 
 /**
  * The Great Wave off Kanagawa as dense, coloured, animated ASCII.
@@ -266,7 +266,7 @@ void main() {
 `;
 
 type Props = {
-  hotspots: Hotspot[];
+  hotspots: Spot[];
   activeId: string | null;
   onSelect: (id: string) => void;
 };
