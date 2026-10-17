@@ -9,15 +9,53 @@ import { loadLabelTexture, makeBackTexture, makeWoodTexture } from "./textures";
 
 export const RACK_X = -20;
 const SLEEVE = 3.1;
-const SLEEVE_Y = TABLE_Y + 1.1;
+const BENCH_TOP = TABLE_Y + 0.3;
+// Sleeves stand on the bench; nothing is sunk into it.
+const SLEEVE_Y = BENCH_TOP + SLEEVE / 2 + 0.03;
 const NEIGHBOUR_GAP = 1.9;
-const WINDOW = 8;
+const PACK_GAP = 0.42;
+const WINDOW = 18;
+const LOAD_RADIUS = 10;
 const INSPECT_DISTANCE = 6.2;
 const INSPECT_SCALE = 0.78;
 
 interface Spin {
   x: number;
   y: number;
+}
+
+/** Where a sleeve sits for a (fractional) distance from the focused one. */
+function layout(d: number) {
+  const absd = Math.abs(d);
+  const sign = Math.sign(d);
+  const lean = Math.min(absd, 1);
+  return {
+    x:
+      RACK_X +
+      (absd < 1
+        ? d * NEIGHBOUR_GAP
+        : sign * (NEIGHBOUR_GAP + (absd - 1) * PACK_GAP)),
+    z: -lean * 0.9,
+    ry: -sign * lean * 1.05,
+    absd,
+  };
+}
+
+/** A thin sheet that bows slightly toward the viewer, like a paper record sleeve. */
+function makePaperGeometry(back: boolean) {
+  const g = new THREE.PlaneGeometry(SLEEVE, SLEEVE, 24, 24);
+  const pos = g.attributes.position;
+  for (let i = 0; i < pos.count; i++) {
+    const u = (pos.getX(i) / SLEEVE) * 2;
+    const v = (pos.getY(i) / SLEEVE) * 2;
+    const bow = 0.05 * (1 - u * u) * (1 - 0.4 * v * v);
+    // Slight dog-ear curl on the top corners.
+    const curl = 0.025 * Math.max(0, v) * u * u * u * u;
+    pos.setZ(i, 0.004 + Math.max(0, bow) + curl);
+  }
+  g.computeVertexNormals();
+  if (back) g.rotateY(Math.PI);
+  return g;
 }
 
 function Sleeve({
@@ -38,31 +76,42 @@ function Sleeve({
   onSelect: (index: number) => void;
 }) {
   const group = useRef<THREE.Group>(null);
+  const placed = useRef(false);
   const { camera } = useThree();
   const focused = index === focus;
   const showBack = inspecting && focused;
+  const near = Math.abs(index - focus) <= LOAD_RADIUS;
+
+  const frontGeometry = useMemo(() => makePaperGeometry(false), []);
+  const backGeometry = useMemo(() => makePaperGeometry(true), []);
+  useEffect(
+    () => () => {
+      frontGeometry.dispose();
+      backGeometry.dispose();
+    },
+    [frontGeometry, backGeometry],
+  );
 
   const [cover, setCover] = useState<THREE.Texture | null>(null);
+  const wantsCover = near && !cover;
   useEffect(() => {
+    if (!wantsCover) return;
     let cancelled = false;
-    let loaded: THREE.Texture | null = null;
-    loadLabelTexture(track.id, 768)
+    loadLabelTexture(track.id, 512)
       .then((tex) => {
         if (cancelled) tex.dispose();
-        else {
-          loaded = tex;
-          setCover(tex);
-        }
+        else setCover(tex);
       })
       .catch(() => {});
     return () => {
       cancelled = true;
-      loaded?.dispose();
     };
-  }, [track.id]);
+  }, [wantsCover, track.id]);
+  useEffect(() => () => cover?.dispose(), [cover]);
 
   const back = useMemo(
-    () => (showBack ? makeBackTexture(track.title, track.author, track.id) : null),
+    () =>
+      showBack ? makeBackTexture(track.title, track.author, track.id) : null,
     [showBack, track],
   );
   useEffect(() => () => back?.dispose(), [back]);
@@ -84,8 +133,7 @@ function Sleeve({
     if (!g) return;
     const dt = Math.min(delta, 0.05);
     const d = index - pos.current;
-    const absd = Math.abs(d);
-    const sign = Math.sign(d);
+    const { x, z, ry, absd } = layout(d);
 
     if (inspecting && focused) {
       const { forward, up, goal, quat, euler, spinQuat } = scratch;
@@ -109,27 +157,38 @@ function Sleeve({
       return;
     }
 
-    const hidden = inspecting;
-    const lean = Math.min(absd, 1);
-    const x =
-      RACK_X + (absd < 1 ? d * NEIGHBOUR_GAP : sign * (NEIGHBOUR_GAP + (absd - 1) * 0.42));
+    // Sleeves near the ends of the loaded window shrink away so they never pop.
+    const edge = THREE.MathUtils.clamp((WINDOW + 0.5 - absd) / 2, 0, 1);
+    const targetScale = inspecting ? 0.001 : edge;
     const lift = focused && !inspecting ? 0.12 : 0;
-    g.position.x = THREE.MathUtils.damp(g.position.x, x, 10, dt);
-    g.position.y = THREE.MathUtils.damp(g.position.y, SLEEVE_Y + lift, 10, dt);
-    g.position.z = THREE.MathUtils.damp(g.position.z, -lean * 0.9, 10, dt);
-    scratch.euler.set(0, -sign * lean * 1.05, 0);
+    scratch.euler.set(0, ry, 0);
     scratch.quat.setFromEuler(scratch.euler);
-    g.quaternion.slerp(scratch.quat, 1 - Math.exp(-10 * dt));
-    const scale = THREE.MathUtils.damp(g.scale.x, hidden ? 0.001 : 1, 8, dt);
-    g.scale.setScalar(scale);
-    g.visible = scale > 0.02;
+
+    if (!placed.current) {
+      // First frame: appear exactly where the layout puts this sleeve.
+      placed.current = true;
+      g.position.set(x, SLEEVE_Y + lift, z);
+      g.quaternion.copy(scratch.quat);
+      g.scale.setScalar(targetScale);
+    } else {
+      g.position.x = THREE.MathUtils.damp(g.position.x, x, 12, dt);
+      g.position.y = THREE.MathUtils.damp(
+        g.position.y,
+        SLEEVE_Y + lift,
+        10,
+        dt,
+      );
+      g.position.z = THREE.MathUtils.damp(g.position.z, z, 12, dt);
+      g.quaternion.slerp(scratch.quat, 1 - Math.exp(-12 * dt));
+      g.scale.setScalar(THREE.MathUtils.damp(g.scale.x, targetScale, 8, dt));
+    }
+    g.visible = g.scale.x > 0.02;
   });
 
   return (
     <group
       ref={group}
-      position={[RACK_X + (index - focus) * NEIGHBOUR_GAP, SLEEVE_Y - 0.6, -0.5]}
-      scale={0.6}
+      visible={false}
       onClick={(e) => {
         e.stopPropagation();
         if (e.delta > 6) return;
@@ -142,36 +201,28 @@ function Sleeve({
         document.body.style.cursor = "";
       }}
     >
-      <mesh castShadow={false}>
-        <boxGeometry args={[SLEEVE, SLEEVE, 0.045]} />
-        <meshStandardMaterial attach="material-0" color="#16171d" roughness={0.8} />
-        <meshStandardMaterial attach="material-1" color="#16171d" roughness={0.8} />
-        <meshStandardMaterial attach="material-2" color="#16171d" roughness={0.8} />
-        <meshStandardMaterial attach="material-3" color="#16171d" roughness={0.8} />
-        {/* Glossy "shrink-wrapped" cover: clearcoat gives it the plastic sheen. */}
+      {/* Printed card sleeve: matte paper with just a light satin finish. */}
+      <mesh geometry={frontGeometry}>
         <meshPhysicalMaterial
-          attach="material-4"
           key={cover ? "cover" : "blank"}
           map={cover}
           color={cover ? "#ffffff" : "#2a2c38"}
-          roughness={0.42}
+          roughness={0.62}
           metalness={0}
-          clearcoat={1}
-          clearcoatRoughness={0.05}
-          envMapIntensity={1.7}
-          sheen={0.4}
-          sheenRoughness={0.5}
-          sheenColor="#ffffff"
+          clearcoat={0.3}
+          clearcoatRoughness={0.4}
+          envMapIntensity={0.9}
         />
+      </mesh>
+      <mesh geometry={backGeometry}>
         <meshPhysicalMaterial
-          attach="material-5"
           key={back ? "back" : "plain"}
           map={back}
-          color={back ? "#ffffff" : "#17181f"}
-          roughness={0.5}
-          clearcoat={1}
-          clearcoatRoughness={0.08}
-          envMapIntensity={1.4}
+          color={back ? "#ffffff" : "#d8d2c4"}
+          roughness={0.7}
+          clearcoat={0.15}
+          clearcoatRoughness={0.5}
+          envMapIntensity={0.8}
         />
       </mesh>
     </group>
@@ -189,7 +240,15 @@ export interface RackProps {
   onBack: () => void;
 }
 
-export function Rack({ records, focus, inspecting, active, onFocus, onInspect, onBack }: RackProps) {
+export function Rack({
+  records,
+  focus,
+  inspecting,
+  active,
+  onFocus,
+  onInspect,
+  onBack,
+}: RackProps) {
   const { gl, camera, pointer } = useThree();
   const pos = useRef(focus);
   const dragFocus = useRef<number | null>(null);
@@ -198,9 +257,25 @@ export function Rack({ records, focus, inspecting, active, onFocus, onInspect, o
   const wood = useMemo(() => makeWoodTexture(), []);
   useEffect(() => () => wood.dispose(), [wood]);
 
-  const state = useRef({ records, focus, inspecting, active, onFocus, onInspect, onBack });
+  const state = useRef({
+    records,
+    focus,
+    inspecting,
+    active,
+    onFocus,
+    onInspect,
+    onBack,
+  });
   useEffect(() => {
-    state.current = { records, focus, inspecting, active, onFocus, onInspect, onBack };
+    state.current = {
+      records,
+      focus,
+      inspecting,
+      active,
+      onFocus,
+      onInspect,
+      onBack,
+    };
   });
 
   // Entering / leaving inspect resets the sleeve's orientation.
@@ -231,7 +306,8 @@ export function Rack({ records, focus, inspecting, active, onFocus, onInspect, o
       const now = performance.now();
       if (now - wheelAt > 250) wheelAccum = 0;
       wheelAt = now;
-      wheelAccum += Math.abs(e.deltaX) > Math.abs(e.deltaY) ? e.deltaX : e.deltaY;
+      wheelAccum +=
+        Math.abs(e.deltaX) > Math.abs(e.deltaY) ? e.deltaX : e.deltaY;
       if (Math.abs(wheelAccum) > 50) {
         step(wheelAccum > 0 ? 1 : -1);
         wheelAccum = 0;
@@ -258,7 +334,11 @@ export function Rack({ records, focus, inspecting, active, onFocus, onInspect, o
           );
         } else if (moved) {
           const raw = startFocus - dx / 110;
-          dragFocus.current = THREE.MathUtils.clamp(raw, 0, state.current.records.length - 1);
+          dragFocus.current = THREE.MathUtils.clamp(
+            raw,
+            0,
+            state.current.records.length - 1,
+          );
         }
       };
       const up = () => {
@@ -283,7 +363,8 @@ export function Rack({ records, focus, inspecting, active, onFocus, onInspect, o
       if (tag === "INPUT" || tag === "TEXTAREA") return;
       if (e.key === "ArrowRight" && !s.inspecting) step(1);
       else if (e.key === "ArrowLeft" && !s.inspecting) step(-1);
-      else if (e.key === "Enter" && !s.inspecting && s.records.length) s.onInspect();
+      else if (e.key === "Enter" && !s.inspecting && s.records.length)
+        s.onInspect();
       else if (e.key === "Escape") s.onBack();
     };
 
@@ -303,7 +384,12 @@ export function Rack({ records, focus, inspecting, active, onFocus, onInspect, o
 
   useFrame((_, delta) => {
     const dt = Math.min(delta, 0.05);
-    pos.current = THREE.MathUtils.damp(pos.current, dragFocus.current ?? focus, 9, dt);
+    pos.current = THREE.MathUtils.damp(
+      pos.current,
+      dragFocus.current ?? focus,
+      9,
+      dt,
+    );
 
     const s = spin.current;
     s.current.x = THREE.MathUtils.damp(s.current.x, s.target.x, 10, dt);
@@ -320,7 +406,12 @@ export function Rack({ records, focus, inspecting, active, onFocus, onInspect, o
         .addScaledVector(forward, INSPECT_DISTANCE - 2.4)
         .addScaledVector(rightV, pointer.x * 4.2)
         .addScaledVector(upV, pointer.y * 3.2 + 0.3);
-      l.intensity = THREE.MathUtils.damp(l.intensity, inspecting ? 26 : 0, 6, dt);
+      l.intensity = THREE.MathUtils.damp(
+        l.intensity,
+        inspecting ? 26 : 0,
+        6,
+        dt,
+      );
     }
   });
 
@@ -331,28 +422,38 @@ export function Rack({ records, focus, inspecting, active, onFocus, onInspect, o
     <>
       <pointLight ref={light} color="#fff4e0" decay={2} />
       {/* Rack lighting, kept separate from the turntable's shadow-casting light. */}
-      <pointLight position={[RACK_X + 2, 6.5, 7]} intensity={70} color="#ffe9cc" />
-      <pointLight position={[RACK_X - 6, 3.5, 6]} intensity={34} color="#9db4ff" />
+      <pointLight
+        position={[RACK_X + 2, 6.5, 7]}
+        intensity={70}
+        color="#ffe9cc"
+      />
+      <pointLight
+        position={[RACK_X - 6, 3.5, 6]}
+        intensity={34}
+        color="#9db4ff"
+      />
 
       {/* Back wall */}
       <mesh position={[RACK_X, 4, -3.4]}>
-        <planeGeometry args={[20, 16]} />
+        <planeGeometry args={[28, 16]} />
         <meshStandardMaterial color="#1a1c28" roughness={0.9} />
       </mesh>
 
-      {/* Wooden bench the sleeves stand in */}
-      <group position={[RACK_X, TABLE_Y, -0.4]}>
-        <mesh position={[0, 0.3, 0]} receiveShadow>
-          <boxGeometry args={[18, 0.6, 3.6]} />
+      {/* Wooden bench the sleeves stand on, with low rails so nothing clips */}
+      <group position={[RACK_X, TABLE_Y, -0.6]}>
+        <mesh position={[0, 0.15, 0]} receiveShadow>
+          <boxGeometry args={[18, 0.3, 4.6]} />
           <meshStandardMaterial map={wood} roughness={0.65} />
         </mesh>
-        <mesh position={[0, 0.36, 1.78]}>
-          <boxGeometry args={[18, 0.72, 0.16]} />
-          <meshStandardMaterial map={wood} roughness={0.55} color="#c9a07c" />
-        </mesh>
+        {[2.2, -2.2].map((z) => (
+          <mesh key={z} position={[0, 0.3 + 0.11, z]}>
+            <boxGeometry args={[18, 0.22, 0.14]} />
+            <meshStandardMaterial map={wood} roughness={0.55} color="#c9a07c" />
+          </mesh>
+        ))}
         {[-9, 9].map((x) => (
-          <mesh key={x} position={[x, 0.9, 0]}>
-            <boxGeometry args={[0.3, 1.8, 3.8]} />
+          <mesh key={x} position={[x, 0.55, 0]}>
+            <boxGeometry args={[0.3, 1.1, 4.8]} />
             <meshStandardMaterial map={wood} roughness={0.65} />
           </mesh>
         ))}
