@@ -29,6 +29,8 @@ export interface SceneProps {
   leaving: boolean;
   pickToken: number;
   want: boolean;
+  /** The cue lever is up. */
+  held: boolean;
   progressRef: React.RefObject<number>;
   onFocus: (index: number) => void;
   onInspect: () => void;
@@ -37,6 +39,8 @@ export interface SceneProps {
   onCarry: () => void;
   onNeedleDown: () => void;
   onLiftOff: () => void;
+  onHold: () => void;
+  onToggleHold: () => void;
 }
 
 function RoomEnv() {
@@ -102,14 +106,17 @@ function World(props: SceneProps) {
   const handlers = useRef(props);
   const control = useRef<ArmControl>({
     want: false,
+    held: false,
     progress: 0,
     onNeedleDown: () => handlers.current.onNeedleDown(),
     onLiftOff: () => handlers.current.onLiftOff(),
+    onHold: () => handlers.current.onHold(),
   });
 
   useEffect(() => {
     handlers.current = props;
     control.current.want = want;
+    control.current.held = props.held;
   });
   // Poll the shared progress value each frame rather than re-rendering.
   useEffect(() => {
@@ -150,7 +157,11 @@ function World(props: SceneProps) {
         <meshStandardMaterial color="#161823" roughness={0.85} />
       </mesh>
 
-      <Turntable simRef={sim} controlRef={control} />
+      <Turntable
+        simRef={sim}
+        controlRef={control}
+        onToggleHold={() => handlers.current.onToggleHold()}
+      />
 
       {loadedId && (
         <Vinyl

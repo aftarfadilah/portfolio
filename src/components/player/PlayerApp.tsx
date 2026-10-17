@@ -3,6 +3,7 @@
 import Link from "next/link";
 import { useCallback, useEffect, useRef, useState } from "react";
 import { parseYouTubeLink } from "@/lib/youtube";
+import { sfx } from "./audio";
 import { addToLibrary, readLibrary, writeLibrary, type Track } from "./library";
 import { Scene, type View } from "./Scene";
 import { YT_STATE, useYouTubePlayer } from "./useYouTubePlayer";
@@ -16,18 +17,24 @@ const ERROR_TEXT: Partial<Record<number, string>> = {
 };
 
 const VOLUME_KEY = "player-volume";
+const WEAR_KEY = "player-wear";
+const SFX_KEY = "player-sfx";
 
-function readStoredVolume(): number {
+function readStoredPercent(key: string, fallback: number): number {
   try {
-    const stored = localStorage.getItem(VOLUME_KEY);
+    const stored = localStorage.getItem(key);
     if (stored !== null) {
       const value = Number(stored);
       if (Number.isFinite(value))
         return Math.min(100, Math.max(0, Math.round(value)));
     }
   } catch {}
-  return 80;
+  return fallback;
 }
+
+const readStoredVolume = () => readStoredPercent(VOLUME_KEY, 80);
+const readStoredWear = () => readStoredPercent(WEAR_KEY, 35);
+const readStoredSfx = () => readStoredPercent(SFX_KEY, 1) === 1;
 
 function formatTime(seconds: number) {
   const s = Math.max(0, Math.floor(seconds));
@@ -48,6 +55,9 @@ export default function PlayerApp() {
   const [want, setWant] = useState(false);
   const [clock, setClock] = useState({ time: 0, duration: 0 });
   const [volume, setVolumeUI] = useState(readStoredVolume);
+  const [wear, setWear] = useState(readStoredWear);
+  const [sfxOn, setSfxOn] = useState(readStoredSfx);
+  const [held, setHeld] = useState(false);
 
   const wantRef = useRef(false);
   const freshRef = useRef(true);
@@ -65,6 +75,26 @@ export default function PlayerApp() {
   const updateWant = useCallback((value: boolean) => {
     wantRef.current = value;
     setWant(value);
+    // A paused or ejected record has nothing for the cue lever to hold.
+    if (!value) setHeld(false);
+  }, []);
+
+  useEffect(() => {
+    sfx.setWear(wear / 100);
+  }, [wear]);
+  useEffect(() => {
+    sfx.setEnabled(sfxOn);
+  }, [sfxOn]);
+  // Browsers only start audio after a gesture; any click or key will do.
+  useEffect(() => {
+    const unlock = () => sfx.unlock();
+    window.addEventListener("pointerdown", unlock);
+    window.addEventListener("keydown", unlock);
+    return () => {
+      window.removeEventListener("pointerdown", unlock);
+      window.removeEventListener("keydown", unlock);
+      sfx.silence();
+    };
   }, []);
 
   useEffect(() => writeLibrary(library), [library]);
@@ -173,6 +203,7 @@ export default function PlayerApp() {
   );
 
   const onNeedleDown = useCallback(() => {
+    sfx.needleDrop();
     const player = playerRef.current;
     if (!player) return;
     if (freshRef.current) {
@@ -214,8 +245,21 @@ export default function PlayerApp() {
   }, []);
 
   const onLiftOff = useCallback(() => {
+    sfx.needleLift();
     stopPlayback();
   }, [stopPlayback]);
+
+  // The cue lever raised the needle mid-song: silence, but keep the record.
+  const onHold = useCallback(() => {
+    sfx.needleLift();
+    stopPlayback();
+  }, [stopPlayback]);
+
+  const toggleHold = useCallback(() => {
+    sfx.unlock();
+    if (!wantRef.current) return;
+    setHeld((value) => !value);
+  }, []);
 
   // Puts a record from the rack on the platter. Runs from a click, which is
   // what lets the embed start playing (silently) right away.
@@ -368,6 +412,20 @@ export default function PlayerApp() {
     }
   }
 
+  function changeWear(value: number) {
+    setWear(value);
+    try {
+      localStorage.setItem(WEAR_KEY, String(value));
+    } catch {}
+  }
+
+  function toggleSfx(on: boolean) {
+    setSfxOn(on);
+    try {
+      localStorage.setItem(SFX_KEY, on ? "1" : "0");
+    } catch {}
+  }
+
   function togglePlay() {
     if (!loaded || leaving) return;
     setMessage(null);
@@ -414,6 +472,9 @@ export default function PlayerApp() {
             onCarry={onCarry}
             onNeedleDown={onNeedleDown}
             onLiftOff={onLiftOff}
+            held={held}
+            onHold={onHold}
+            onToggleHold={toggleHold}
           />
 
           {onDeck && (
@@ -612,7 +673,16 @@ export default function PlayerApp() {
               </label>
               <div className="mt-3 flex gap-2">
                 <button onClick={togglePlay} className={`${action} flex-1`}>
-                  {want ? "Pause (lift the needle)" : "Play (drop the needle)"}
+                  {want ? "Pause" : "Play (drop the needle)"}
+                </button>
+                <button
+                  onClick={toggleHold}
+                  disabled={!want}
+                  aria-pressed={held}
+                  title="The cue lever on the tonearm does the same"
+                  className={action}
+                >
+                  {held ? "Lower needle" : "Lift needle"}
                 </button>
                 <button onClick={eject} className={action}>
                   Eject
@@ -625,6 +695,31 @@ export default function PlayerApp() {
               record.
             </p>
           )}
+          <div className="mt-3 space-y-2 border-t border-border pt-3">
+            <label className="flex items-center gap-3 font-mono text-[10px] text-muted-foreground">
+              <span className="w-12 uppercase tracking-widest">Wear</span>
+              <input
+                type="range"
+                min={0}
+                max={100}
+                step={1}
+                value={wear}
+                onChange={(e) => changeWear(Number(e.target.value))}
+                aria-label="Record wear: more wear, more surface noise"
+                className="h-1 flex-1 cursor-pointer accent-primary"
+              />
+              <span className="w-8 text-right tabular-nums">{wear}</span>
+            </label>
+            <label className="flex items-center gap-2 font-mono text-[10px] text-muted-foreground">
+              <input
+                type="checkbox"
+                checked={sfxOn}
+                onChange={(e) => toggleSfx(e.target.checked)}
+                className="accent-primary"
+              />
+              Turntable sounds (sleeve, needle, crackle)
+            </label>
+          </div>
         </div>
 
         <div className="pointer-events-auto w-full sm:w-[356px]">
