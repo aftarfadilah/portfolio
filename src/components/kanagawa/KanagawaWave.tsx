@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useRef } from "react";
+import type { Hotspot } from "@/data/kanagawa-wiki";
 
 /**
  * The Great Wave off Kanagawa as dense, coloured, animated ASCII.
@@ -144,8 +145,8 @@ precision highp float;
 #else
 precision mediump float;
 #endif
-uniform vec2 uRes, uCell, uGrid, uVis, uView, uPtr;
-uniform float uTime, uSweep, uSlab, uActive;
+uniform vec2 uRes, uCell, uGrid, uVis, uView, uPtr, uFocus;
+uniform float uTime, uSweep, uSlab, uActive, uFocusR, uFocusAmt;
 uniform vec4 uSpark;
 uniform vec3 uRip[4];
 uniform sampler2D uData, uAtlas, uPal;
@@ -243,7 +244,19 @@ void main() {
       lev += floor(glow * 2.2 + 0.5);
       if (glow > 0.5) hue = H_CARP;
     }
-    lev = clamp(lev, 0.0, LEVELS - 1.0);
+    // Wiki spotlight: dim the print around the chosen spot and ring it in gold.
+    if (uFocusAmt > 0.002) {
+      float dist = length((sc - uFocus) * vec2(1.0, 2.0));
+      float inside = 1.0 - smoothstep(uFocusR * 0.82, uFocusR, dist);
+      lev += uFocusAmt * (inside * 1.5 - (1.0 - inside) * 2.6);
+      float ring = 1.0 - smoothstep(0.0, 1.1, abs(dist - uFocusR));
+      if (ring > 0.5 && hash(sc, floor(t * 5.0)) < 0.85) {
+        g = uSpark.x;
+        hue = H_CARP;
+        lev = LEVELS;
+      }
+    }
+    lev = clamp(floor(lev + 0.5), 0.0, LEVELS - 1.0);
   }
 
   float cov = texture2D(uAtlas, vec2((g + loc.x) / NG, loc.y)).a;
@@ -252,17 +265,36 @@ void main() {
 }
 `;
 
-export default function KanagawaWave() {
+type Props = {
+  hotspots: Hotspot[];
+  activeId: string | null;
+  onSelect: (id: string) => void;
+};
+
+export default function KanagawaWave({ hotspots, activeId, onSelect }: Props) {
   const canvasRef = useRef<HTMLCanvasElement>(null);
+  const hostRef = useRef<HTMLDivElement>(null);
+  const markerRefs = useRef<(HTMLButtonElement | null)[]>([]);
+  const activeRef = useRef(activeId);
+  const hotspotsRef = useRef(hotspots);
+
+  useEffect(() => {
+    activeRef.current = activeId;
+  }, [activeId]);
+  useEffect(() => {
+    hotspotsRef.current = hotspots;
+  }, [hotspots]);
 
   useEffect(() => {
     const canvas = canvasRef.current;
+    const host = hostRef.current;
     const gl = canvas?.getContext("webgl", { antialias: false, alpha: true, premultipliedAlpha: true });
-    if (!canvas || !gl) return;
+    if (!canvas || !host || !gl) return;
 
     const reduced = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
     const pointer = { x: 0, y: 0, active: false };
     const pan = { x: 0.42, y: 0.25 };
+    const focus = { x: 0, y: 0, r: 20, amt: 0 };
     const ripples: Ripple[] = [];
     const img = new Image();
     let ready = false;
@@ -389,7 +421,8 @@ export default function KanagawaWave() {
       const fontSize = cw / 0.58;
       vc = Math.ceil(Wd / cw);
       vr = Math.ceil(Hd / ch);
-      const scale = Math.max(Wd / img.naturalWidth, Hd / img.naturalHeight);
+      // A little oversize, so the camera has room to pan and to clear the wiki panel.
+      const scale = Math.max(Wd / img.naturalWidth, Hd / img.naturalHeight) * 1.14;
       gc = Math.max(vc, Math.ceil((img.naturalWidth * scale) / cw));
       gr = Math.max(vr, Math.ceil((img.naturalHeight * scale) / ch));
 
@@ -541,16 +574,51 @@ export default function KanagawaWave() {
       const t = reduced ? INTRO + 6 : (now - start) / 1000;
 
       // Camera: the pointer pans around the print; otherwise it drifts gently.
-      const tx = pointer.active ? pointer.x / canvas.clientWidth : 0.42 + 0.14 * Math.sin(t * 0.05);
-      const ty = pointer.active ? 0.15 + 0.7 * (pointer.y / canvas.clientHeight) : 0.25;
-      pan.x += (tx - pan.x) * 0.05;
-      pan.y += (ty - pan.y) * 0.05;
+      // Picking a wiki spot flies the camera to it instead.
+      const spot = hotspotsRef.current.find((h) => h.id === activeRef.current);
+      const narrow = canvas.clientWidth < 900;
+      let tx = pointer.active ? pointer.x / canvas.clientWidth : 0.42 + 0.14 * Math.sin(t * 0.05);
+      let ty = pointer.active ? 0.15 + 0.7 * (pointer.y / canvas.clientHeight) : 0.25;
+      if (spot) {
+        const gx = spot.u * gc;
+        const gy = spot.v * gr;
+        if (gc > vc) tx = clamp((gx - vc * (narrow ? 0.5 : 0.34)) / (gc - vc));
+        if (gr > vr) ty = clamp((gy - vr * (narrow ? 0.28 : 0.5)) / (gr - vr));
+        if (focus.amt < 0.02) {
+          focus.x = gx;
+          focus.y = gy;
+        }
+        focus.x += (gx - focus.x) * 0.12;
+        focus.y += (gy - focus.y) * 0.12;
+        focus.r += (spot.r * gc - focus.r) * 0.12;
+      }
+      focus.amt += ((spot ? 1 : 0) - focus.amt) * 0.08;
+      pan.x += (tx - pan.x) * 0.06;
+      pan.y += (ty - pan.y) * 0.06;
 
       const rip = new Float32Array(12).fill(0);
       for (let i = 0; i < 4; i++) rip[i * 3 + 2] = -100;
       ripples.slice(-4).forEach((r, i) => rip.set([r.x, r.y, r.t0], i * 3));
 
-      gl.uniform2f(U("uView"), Math.round((gc - vc) * clamp(pan.x)), Math.round((gr - vr) * clamp(pan.y)));
+      const vx = Math.round((gc - vc) * clamp(pan.x));
+      const vy = Math.round((gr - vr) * clamp(pan.y));
+      gl.uniform2f(U("uView"), vx, vy);
+      gl.uniform2f(U("uFocus"), focus.x, focus.y);
+      gl.uniform1f(U("uFocusR"), focus.r);
+      gl.uniform1f(U("uFocusAmt"), focus.amt);
+
+      // Wiki markers ride along with the picture.
+      const shown = clamp((t - INTRO) / 0.8);
+      hotspotsRef.current.forEach((h, i) => {
+        const el = markerRefs.current[i];
+        if (!el) return;
+        const x = ((h.u * gc - vx + 0.5) * cw) / dpr;
+        const y = ((h.v * gr - vy + 0.5) * ch) / dpr;
+        const on = x > 8 && y > 8 && x < canvas.clientWidth - 8 && y < canvas.clientHeight - 8;
+        el.style.transform = `translate(${x}px, ${y}px) translate(-50%, -50%)`;
+        el.style.opacity = on ? String(shown) : "0";
+        el.style.pointerEvents = on && shown > 0.5 ? "auto" : "none";
+      });
       gl.uniform2f(U("uPtr"), (pointer.x * dpr) / cw, (pointer.y * dpr) / ch);
       gl.uniform1f(U("uActive"), pointer.active ? 1 : 0);
       gl.uniform1f(U("uTime"), t);
@@ -563,7 +631,7 @@ export default function KanagawaWave() {
     };
 
     const onMove = (e: PointerEvent) => {
-      const r = canvas.getBoundingClientRect();
+      const r = host.getBoundingClientRect();
       pointer.x = e.clientX - r.left;
       pointer.y = e.clientY - r.top;
       pointer.active = true;
@@ -600,27 +668,58 @@ export default function KanagawaWave() {
 
     const ro = new ResizeObserver(rebuildSoon);
     ro.observe(canvas);
-    canvas.addEventListener("pointermove", onMove, { passive: true });
-    canvas.addEventListener("pointerdown", onDown);
-    canvas.addEventListener("pointerleave", onLeave);
+    host.addEventListener("pointermove", onMove, { passive: true });
+    host.addEventListener("pointerdown", onDown);
+    host.addEventListener("pointerleave", onLeave);
 
     return () => {
       disposed = true;
       window.clearTimeout(rebuild);
       cancelAnimationFrame(raf);
       ro.disconnect();
-      canvas.removeEventListener("pointermove", onMove);
-      canvas.removeEventListener("pointerdown", onDown);
-      canvas.removeEventListener("pointerleave", onLeave);
+      host.removeEventListener("pointermove", onMove);
+      host.removeEventListener("pointerdown", onDown);
+      host.removeEventListener("pointerleave", onLeave);
     };
   }, []);
 
   return (
-    <canvas
-      ref={canvasRef}
-      aria-label="The Great Wave off Kanagawa by Hokusai, drawn in animated ASCII"
-      role="img"
-      className="absolute inset-0 h-full w-full touch-none"
-    />
+    <div ref={hostRef} className="absolute inset-0 touch-none overflow-hidden">
+      <canvas
+        ref={canvasRef}
+        aria-label="The Great Wave off Kanagawa by Hokusai, drawn in animated ASCII"
+        role="img"
+        className="absolute inset-0 h-full w-full"
+      />
+      {hotspots.map((h, i) => (
+        <button
+          key={h.id}
+          ref={(el) => {
+            markerRefs.current[i] = el;
+          }}
+          type="button"
+          onClick={() => onSelect(h.id)}
+          aria-label={`${h.num} ${h.label}`}
+          style={{ opacity: 0, pointerEvents: "none" }}
+          className="group absolute left-0 top-0 z-10 font-mono will-change-transform"
+        >
+          <span
+            className={`relative flex h-6 min-w-6 items-center justify-center rounded-full border px-1 text-[10px] font-semibold transition-colors ${
+              activeId === h.id
+                ? "border-[#E6C384] bg-[#E6C384] text-[#16161D]"
+                : "border-[#E6C384] bg-[#16161D]/85 text-[#E6C384] group-hover:bg-[#E6C384] group-hover:text-[#16161D]"
+            }`}
+          >
+            {activeId !== h.id && (
+              <span className="absolute inset-0 animate-ping rounded-full border border-[#E6C384]/60" />
+            )}
+            {h.num}
+          </span>
+          <span className="pointer-events-none absolute left-full top-1/2 ml-2 hidden -translate-y-1/2 whitespace-nowrap rounded bg-[#16161D]/90 px-1.5 py-0.5 text-[10px] tracking-widest text-[#DCD7BA] group-hover:block group-focus-visible:block">
+            {h.label}
+          </span>
+        </button>
+      ))}
+    </div>
   );
 }
