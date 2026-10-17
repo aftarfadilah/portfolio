@@ -1,25 +1,25 @@
 "use client";
 
-import { animate, useInView, useMotionValue, useTransform, motion } from "framer-motion";
+import { animate, useMotionValue, useTransform, motion } from "framer-motion";
 import { useEffect, useRef, useState } from "react";
 import { FIGURES, LABELS, SOURCES } from "@/data/karhutla";
+import Haze from "./Haze";
 import HotspotField, { type Stats } from "./HotspotField";
-import styles from "./karhutla.module.css";
 import { fmt, serif, type T } from "./shared";
 
 /** Above the fold, and the whole page: the message in type, the evidence as a map of real detections. */
 export default function Hero({ t, lang }: { t: T; lang: string }) {
   const ref = useRef<HTMLDivElement>(null);
-  const seen = useInView(ref, { once: true, amount: 0.3 });
+  const [started, setStarted] = useState(false);
   const count = useMotionValue(0);
   const shown = useTransform(count, (v) => fmt(Math.round(v), lang));
   const [stats, setStats] = useState<Stats | null>(null);
 
   useEffect(() => {
-    if (!seen) return;
+    if (!started) return;
     const controls = animate(count, FIGURES.peakDay, { duration: 2.6, ease: [0.16, 1, 0.3, 1] });
     return () => controls.stop();
-  }, [seen, count]);
+  }, [started, count]);
 
   const legend = [
     { label: t("conf_h"), n: stats?.high, color: "#ff5a1f" },
@@ -29,13 +29,13 @@ export default function Hero({ t, lang }: { t: T; lang: string }) {
 
   return (
     <section ref={ref} className="relative h-full min-h-[640px] w-full overflow-hidden bg-[#0a0706] text-[#efe7dc]">
-      <HotspotField t={t} onStats={setStats} />
+      <HotspotField t={t} onStats={setStats} active={started} />
 
       {/* soft scrims keep the type readable where it crosses the map */}
       <div className="pointer-events-none absolute inset-0 bg-[radial-gradient(ellipse_70%_55%_at_18%_14%,rgba(10,7,6,0.85),transparent),radial-gradient(ellipse_60%_45%_at_14%_92%,rgba(10,7,6,0.8),transparent)]" />
 
-      <div className="pointer-events-none relative z-10 flex h-full flex-col justify-between px-6 pb-7 pt-20 sm:px-10 sm:pb-9 sm:pt-24">
-        <div className={styles.rise}>
+      <div className={`pointer-events-none relative z-10 flex h-full flex-col justify-between px-6 pb-7 pt-20 transition-opacity duration-1000 sm:px-10 sm:pb-9 sm:pt-24 ${started ? "opacity-100" : "opacity-0"}`}>
+        <div className={`transition-all duration-1000 ${started ? "translate-y-0 opacity-100" : "translate-y-3 opacity-0"}`}>
           <p className="text-[11px] font-medium uppercase tracking-[0.2em] opacity-70">{t("heroKicker")}</p>
           <h1 className={`${serif} mt-4 max-w-4xl text-[clamp(2.6rem,7.2vw,6.8rem)] leading-[0.96] lg:max-w-[calc(100%-21rem)]`}>{t("heroTitle")}</h1>
           <p className="mt-5 max-w-md text-sm leading-relaxed opacity-80 sm:text-base">{t("heroDeck")}</p>
@@ -77,6 +77,8 @@ export default function Hero({ t, lang }: { t: T; lang: string }) {
           </div>
         </div>
       </div>
+
+      <Haze t={t} onStart={() => setStarted(true)} onCleared={() => setStarted(true)} />
 
       <p className="sr-only">
         {LABELS.map((l) => t(l.key)).join(", ")}

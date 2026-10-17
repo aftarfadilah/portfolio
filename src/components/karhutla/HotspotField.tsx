@@ -49,7 +49,7 @@ function inside(x: number, y: number, poly: [number, number][]): boolean {
   return c;
 }
 
-export default function HotspotField({ t, onStats }: { t: T; onStats: (s: Stats) => void }) {
+export default function HotspotField({ t, onStats, active }: { t: T; onStats: (s: Stats) => void; active: boolean }) {
   const wrap = useRef<HTMLDivElement>(null);
   const canvas = useRef<HTMLCanvasElement>(null);
   const [hover, setHover] = useState<Hover | null>(null);
@@ -58,9 +58,14 @@ export default function HotspotField({ t, onStats }: { t: T; onStats: (s: Stats)
   const stats = useRef(onStats);
   const labels = useRef<string[]>([]);
   const rebuild = useRef<() => void>(() => {});
+  const begin = useRef<() => void>(() => {});
   useEffect(() => {
     stats.current = onStats;
   }, [onStats]);
+  // The intro sweep starts when the haze is first touched, not behind it.
+  useEffect(() => {
+    if (active) begin.current();
+  }, [active]);
   // Place names follow the language without restarting the animation.
   useEffect(() => {
     labels.current = LABELS.map((l) => t(l.key).toUpperCase());
@@ -96,6 +101,19 @@ export default function HotspotField({ t, onStats }: { t: T; onStats: (s: Stats)
     let still: HTMLCanvasElement | null = null;
     let picked = -1;
     let raf = 0;
+    let ready = false;
+    let go = false;
+    let running = false;
+    const maybeStart = () => {
+      if (!ready || !go || running) return;
+      running = true;
+      t0 = performance.now();
+      raf = requestAnimationFrame(loop);
+    };
+    begin.current = () => {
+      go = true;
+      maybeStart();
+    };
 
     /** Framing: wide screens show the whole archipelago, narrow ones crop to Sumatra and Kalimantan. */
     const frame = () => {
@@ -310,11 +328,11 @@ export default function HotspotField({ t, onStats }: { t: T; onStats: (s: Stats)
           phase[i] = (i * 2.399) % (Math.PI * 2);
           speed[i] = 0.8 + ((i * 7) % 11) / 8;
         });
-        t0 = performance.now();
         layout();
         stats.current({ n, high: counts[0], medium: counts[1], low: counts[2] });
+        ready = true;
         if (reduced) draw(performance.now());
-        else raf = requestAnimationFrame(loop);
+        else maybeStart();
       })
       .catch(() => {});
 
@@ -323,6 +341,7 @@ export default function HotspotField({ t, onStats }: { t: T; onStats: (s: Stats)
       cancelAnimationFrame(raf);
       ro.disconnect();
       rebuild.current = () => {};
+      begin.current = () => {};
       el.removeEventListener("pointermove", onMove);
       el.removeEventListener("pointerdown", onMove);
       el.removeEventListener("pointerleave", onLeave);

@@ -41,6 +41,9 @@ export const C = {
     en: "Each point is one pixel, about 0.4 km wide, from one satellite of several.",
     id: "Tiap titik adalah satu piksel selebar ±0,4 km, dari satu satelit di antara beberapa.",
   },
+  hazeHint: { en: "Swipe to clear the haze", id: "Usap untuk menyibak kabut" },
+  hazeSub: { en: "That is what a fire season looks like from the ground.", id: "Begitulah musim api terlihat dari bawah." },
+  hazeSkip: { en: "Clear it", id: "Singkirkan" },
   hint: { en: "Hover or tap a point to read the pixel.", id: "Arahkan atau ketuk sebuah titik untuk membaca pikselnya." },
   mapAria: {
     en: "Map of Indonesia where each glowing point is one satellite heat detection from the last pass.",
