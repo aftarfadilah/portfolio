@@ -1,120 +1,86 @@
 "use client";
 
-import { animate, motion, useInView, useMotionValue, useTransform } from "framer-motion";
-import { useEffect, useRef } from "react";
-import { FIGURES } from "@/data/karhutla";
+import { animate, useInView, useMotionValue, useTransform, motion } from "framer-motion";
+import { useEffect, useRef, useState } from "react";
+import { FIGURES, LABELS, SOURCES } from "@/data/karhutla";
+import HotspotField, { type Stats } from "./HotspotField";
 import styles from "./karhutla.module.css";
 import { fmt, serif, type T } from "./shared";
 
-// A hazy dawn, kept deliberately dark and quiet so the typography carries the page.
-
-function treeline(seed: number, base: number, amp: number, step = 34): string {
-  let s = seed;
-  const r = () => ((s = (s * 16807) % 2147483647) / 2147483647);
-  let d = `M0,900 L0,${base}`;
-  for (let x = 0; x < 1640; x += step) {
-    const h = base - amp * (0.4 + r() * 0.6);
-    d += ` Q${x + step / 2},${h - amp * 0.35} ${x + step},${base - amp * 0.2 * r()}`;
-  }
-  return d + " L1600,900 Z";
-}
-
-const FAR = treeline(11, 760, 60);
-const MID = treeline(29, 810, 80, 42);
-const NEAR = treeline(53, 870, 100, 54);
-
-const EMBERS = Array.from({ length: 22 }, (_, i) => ({
-  x: 60 + ((i * 197) % 1480),
-  y: 800 + ((i * 53) % 90),
-  r: 1.2 + ((i * 7) % 4) * 0.5,
-  dur: 8 + ((i * 3) % 9),
-  delay: -((i * 1.7) % 12),
-  dx: ((i % 5) - 2) * 26,
-}));
-
+/** Above the fold, and the whole page: the message in type, the evidence as a map of real detections. */
 export default function Hero({ t, lang }: { t: T; lang: string }) {
   const ref = useRef<HTMLDivElement>(null);
   const seen = useInView(ref, { once: true, amount: 0.3 });
   const count = useMotionValue(0);
   const shown = useTransform(count, (v) => fmt(Math.round(v), lang));
+  const [stats, setStats] = useState<Stats | null>(null);
 
   useEffect(() => {
     if (!seen) return;
-    const controls = animate(count, FIGURES.peakDay, { duration: 2.4, ease: [0.16, 1, 0.3, 1] });
+    const controls = animate(count, FIGURES.peakDay, { duration: 2.6, ease: [0.16, 1, 0.3, 1] });
     return () => controls.stop();
   }, [seen, count]);
 
-  return (
-    <section data-ch="0" id="ch-0" className="relative h-screen min-h-[680px] overflow-hidden bg-ink text-[#f1ece3]">
-      <svg className="absolute inset-0 h-full w-full" viewBox="0 0 1600 900" preserveAspectRatio="xMidYMid slice" aria-hidden="true">
-        <defs>
-          <linearGradient id="kh-sky" x1="0" y1="0" x2="0" y2="1">
-            <stop offset="0" stopColor="#16110e" />
-            <stop offset="0.5" stopColor="#3a1a10" />
-            <stop offset="0.85" stopColor="#a8481c" />
-            <stop offset="1" stopColor="#d9712c" />
-          </linearGradient>
-          <radialGradient id="kh-sun" cx="0.5" cy="0.5" r="0.5">
-            <stop offset="0" stopColor="#ffd9a0" stopOpacity="0.9" />
-            <stop offset="0.4" stopColor="#f08a3c" stopOpacity="0.5" />
-            <stop offset="1" stopColor="#e2410d" stopOpacity="0" />
-          </radialGradient>
-          <filter id="kh-blur" x="-30%" y="-30%" width="160%" height="160%">
-            <feGaussianBlur stdDeviation="40" />
-          </filter>
-        </defs>
-        <rect width="1600" height="900" fill="url(#kh-sky)" />
-        <g className={styles.sunPulse}>
-          <circle cx="1180" cy="640" r="360" fill="url(#kh-sun)" />
-        </g>
-        <g filter="url(#kh-blur)">
-          <ellipse className={styles.smokeA} cx="420" cy="330" rx="540" ry="90" fill="#120c0a" opacity="0.7" />
-          <ellipse className={styles.smokeB} cx="1180" cy="240" rx="640" ry="110" fill="#120c0a" opacity="0.7" />
-          <ellipse className={styles.smokeC} cx="800" cy="520" rx="700" ry="60" fill="#3a1a10" opacity="0.5" />
-        </g>
-        <path d={FAR} fill="#4a2012" opacity="0.9" />
-        <path d={MID} fill="#2a130c" />
-        <path d={NEAR} fill="#16110e" />
-        {EMBERS.map((e, i) => (
-          <circle
-            key={i}
-            className={styles.ember}
-            cx={e.x}
-            cy={e.y}
-            r={e.r}
-            fill="#f6a24a"
-            style={{ animationDuration: `${e.dur}s`, animationDelay: `${e.delay}s`, ["--dx" as string]: `${e.dx}px` }}
-          />
-        ))}
-      </svg>
+  const legend = [
+    { label: t("conf_h"), n: stats?.high, color: "#ff5a1f" },
+    { label: t("conf_n"), n: stats?.medium, color: "#ff9a3c" },
+    { label: t("conf_l"), n: stats?.low, color: "#8f979f" },
+  ];
 
-      <div ref={ref} className="relative z-10 mx-auto flex h-full max-w-7xl flex-col justify-between px-6 pb-12 pt-24 sm:px-10">
-        <div>
-          <motion.p initial={{ opacity: 0 }} animate={{ opacity: 0.8 }} transition={{ duration: 1 }} className="text-xs font-medium uppercase tracking-[0.2em]">
-            {t("heroKicker")}
-          </motion.p>
-          <motion.h1
-            initial={{ opacity: 0, y: 24 }}
-            animate={{ opacity: 1, y: 0 }}
-            transition={{ duration: 1, delay: 0.1, ease: [0.16, 1, 0.3, 1] }}
-            className={`${serif} mt-5 max-w-4xl text-5xl leading-[0.98] sm:text-7xl lg:text-8xl`}
-          >
-            {t("heroTitle")}
-          </motion.h1>
+  return (
+    <section ref={ref} className="relative h-full min-h-[640px] w-full overflow-hidden bg-[#0a0706] text-[#efe7dc]">
+      <HotspotField t={t} onStats={setStats} />
+
+      {/* soft scrims keep the type readable where it crosses the map */}
+      <div className="pointer-events-none absolute inset-0 bg-[radial-gradient(ellipse_70%_55%_at_18%_14%,rgba(10,7,6,0.85),transparent),radial-gradient(ellipse_60%_45%_at_14%_92%,rgba(10,7,6,0.8),transparent)]" />
+
+      <div className="pointer-events-none relative z-10 flex h-full flex-col justify-between px-6 pb-7 pt-20 sm:px-10 sm:pb-9 sm:pt-24">
+        <div className={styles.rise}>
+          <p className="text-[11px] font-medium uppercase tracking-[0.2em] opacity-70">{t("heroKicker")}</p>
+          <h1 className={`${serif} mt-4 max-w-4xl text-[clamp(2.6rem,7.2vw,6.8rem)] leading-[0.96] lg:max-w-[calc(100%-21rem)]`}>{t("heroTitle")}</h1>
+          <p className="mt-5 max-w-md text-sm leading-relaxed opacity-80 sm:text-base">{t("heroDeck")}</p>
         </div>
 
-        <div>
-          <p className="max-w-md text-sm leading-relaxed opacity-80 sm:text-base">{t("heroLead")}</p>
-          <div className="mt-2 flex flex-wrap items-end gap-x-6">
-            <motion.span className={`${serif} text-[clamp(4.5rem,17vw,15rem)] leading-[0.85] tabular-nums`}>{shown}</motion.span>
-            <span className="pb-3 text-base opacity-90 sm:pb-6 sm:text-xl">{t("heroUnit")}</span>
+        <div className="flex flex-col justify-between gap-6 lg:flex-row lg:items-end">
+          <div>
+            <motion.p className={`${serif} text-[clamp(4.2rem,14vw,12.5rem)] leading-[0.82] tabular-nums`}>{shown}</motion.p>
+            <div className="mt-3 flex flex-wrap items-baseline gap-x-4 gap-y-1 border-t border-white/20 pt-3">
+              <p className="text-base sm:text-lg">{t("heroUnit")}</p>
+              <p className="text-xs opacity-60">{t("heroPeak")}</p>
+            </div>
           </div>
-          <div className="mt-6 flex flex-wrap items-end justify-between gap-4 border-t border-white/20 pt-4">
-            <p className="max-w-lg text-sm leading-relaxed opacity-75">{t("heroTail")}</p>
-            <p className="text-xs opacity-60">{t("heroSource")}</p>
+
+          <div className="max-w-sm text-xs lg:absolute lg:right-10 lg:top-24 lg:w-72">
+            <p className="flex items-baseline justify-between font-medium uppercase tracking-[0.18em]">
+              {t("hudTitle")}
+              <span className="tabular-nums">{stats ? fmt(stats.n, lang) : "–"}</span>
+            </p>
+            <ul className="mt-3 grid gap-1.5">
+              {legend.map((l) => (
+                <li key={l.label} className="flex items-center gap-2.5">
+                  <span className="h-2.5 w-2.5 rounded-full" style={{ background: l.color, boxShadow: `0 0 10px ${l.color}` }} />
+                  <span className="flex-1 opacity-85">{l.label}</span>
+                  <span className="tabular-nums opacity-70">{l.n === undefined ? "–" : fmt(l.n, lang)}</span>
+                </li>
+              ))}
+            </ul>
+            <p className="mt-3 leading-relaxed opacity-60">{t("hudPixel")}</p>
+            <p className="mt-1 opacity-45">{t("hudMeta")}</p>
+            <p className="mt-3 flex flex-wrap gap-x-4 gap-y-1 opacity-70">
+              {SOURCES.map((s) => (
+                <a key={s.href} href={s.href} target="_blank" rel="noopener noreferrer" className="pointer-events-auto underline underline-offset-4 hover:opacity-100">
+                  {s.label}
+                </a>
+              ))}
+            </p>
+            <p className="mt-3 hidden opacity-45 lg:block">{t("hint")}</p>
           </div>
         </div>
       </div>
+
+      <p className="sr-only">
+        {LABELS.map((l) => t(l.key)).join(", ")}
+      </p>
     </section>
   );
 }
