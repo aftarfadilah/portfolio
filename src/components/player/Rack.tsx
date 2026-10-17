@@ -4,7 +4,7 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import { useFrame, useThree } from "@react-three/fiber";
 import * as THREE from "three";
 import type { Track } from "./library";
-import { TABLE_Y } from "./sim";
+import { TABLE_Y, type Anchor } from "./sim";
 import { loadLabelTexture, makeBackTexture, makeWoodTexture } from "./textures";
 
 export const RACK_X = -20;
@@ -65,6 +65,7 @@ function Sleeve({
   focus,
   inspecting,
   spinRef,
+  anchor: anchorRef,
   onSelect,
 }: {
   track: Track;
@@ -73,6 +74,7 @@ function Sleeve({
   focus: number;
   inspecting: boolean;
   spinRef: React.RefObject<{ target: Spin; current: Spin }>;
+  anchor: React.RefObject<Anchor>;
   onSelect: (index: number) => void;
 }) {
   const group = useRef<THREE.Group>(null);
@@ -154,6 +156,17 @@ function Sleeve({
       g.quaternion.slerp(quat, 1 - Math.exp(-8 * dt));
       g.scale.setScalar(THREE.MathUtils.damp(g.scale.x, INSPECT_SCALE, 8, dt));
       g.visible = true;
+
+      const a = anchorRef.current;
+      a.pos.copy(g.position);
+      a.quat.copy(g.quaternion);
+      a.scale = g.scale.x;
+      a.settled =
+        g.position.distanceTo(goal) < 0.06 &&
+        Math.abs(g.scale.x - INSPECT_SCALE) < 0.02 &&
+        g.quaternion.angleTo(quat) < 0.04 &&
+        Math.abs(spin.x - spinRef.current.target.x) < 0.04 &&
+        Math.abs(spin.y - spinRef.current.target.y) < 0.04;
       return;
     }
 
@@ -235,6 +248,9 @@ export interface RackProps {
   inspecting: boolean;
   /** The rack is on screen (rack or inspect view). */
   active: boolean;
+  /** Bumped when a record is picked: the sleeve turns to face the viewer. */
+  pickToken: number;
+  anchor: React.RefObject<Anchor>;
   onFocus: (index: number) => void;
   onInspect: () => void;
   onBack: () => void;
@@ -245,6 +261,8 @@ export function Rack({
   focus,
   inspecting,
   active,
+  pickToken,
+  anchor: anchorRef,
   onFocus,
   onInspect,
   onBack,
@@ -287,6 +305,14 @@ export function Rack({
       s.current.x = s.current.y = 0;
     }
   }, [inspecting]);
+
+  // Picking a record squares the sleeve up so the disc slides out of its front.
+  useEffect(() => {
+    if (pickToken === 0) return;
+    spin.current.target.x = -0.04;
+    spin.current.target.y = 0.08;
+    anchorRef.current.settled = false;
+  }, [pickToken, anchorRef]);
 
   useEffect(() => {
     const el = gl.domElement;
@@ -468,6 +494,7 @@ export function Rack({
           focus={focus}
           inspecting={inspecting}
           spinRef={spin}
+          anchor={anchorRef}
           onSelect={(index) => {
             if (index === state.current.focus) state.current.onInspect();
             else state.current.onFocus(index);

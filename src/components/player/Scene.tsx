@@ -8,7 +8,14 @@ import { Turntable } from "./Turntable";
 import { Rack, RACK_X } from "./Rack";
 import { Vinyl } from "./Vinyl";
 import type { Track } from "./library";
-import { TABLE_Y, createSim, type ArmControl, type Sim } from "./sim";
+import {
+  TABLE_Y,
+  createAnchor,
+  createSim,
+  type Anchor,
+  type ArmControl,
+  type Sim,
+} from "./sim";
 
 export type View = "deck" | "rack";
 
@@ -20,11 +27,14 @@ export interface SceneProps {
   /** Video id of the record on (or heading to) the platter. */
   loadedId: string | null;
   leaving: boolean;
+  pickToken: number;
   want: boolean;
   progressRef: React.RefObject<number>;
   onFocus: (index: number) => void;
   onInspect: () => void;
   onBack: () => void;
+  /** The disc has left the jacket and is being carried to the turntable. */
+  onCarry: () => void;
   onNeedleDown: () => void;
   onLiftOff: () => void;
 }
@@ -88,6 +98,7 @@ function CameraRig({ view }: { view: View }) {
 function World(props: SceneProps) {
   const { view, want, progressRef, loadedId, leaving } = props;
   const sim = useRef<Sim>(createSim());
+  const anchor = useRef<Anchor>(createAnchor());
   const handlers = useRef(props);
   const control = useRef<ArmControl>({
     want: false,
@@ -130,7 +141,11 @@ function World(props: SceneProps) {
       />
       <pointLight position={[-4, 3, 4]} intensity={8} color="#8aa4ff" />
 
-      <mesh rotation={[-Math.PI / 2, 0, 0]} position={[0, TABLE_Y - 0.001, 0]} receiveShadow>
+      <mesh
+        rotation={[-Math.PI / 2, 0, 0]}
+        position={[0, TABLE_Y - 0.001, 0]}
+        receiveShadow
+      >
         <planeGeometry args={[80, 60]} />
         <meshStandardMaterial color="#161823" roughness={0.85} />
       </mesh>
@@ -138,7 +153,14 @@ function World(props: SceneProps) {
       <Turntable simRef={sim} controlRef={control} />
 
       {loadedId && (
-        <Vinyl key={loadedId} videoId={loadedId} simRef={sim} leaving={leaving} />
+        <Vinyl
+          key={loadedId}
+          videoId={loadedId}
+          simRef={sim}
+          anchor={anchor}
+          leaving={leaving}
+          onCarry={() => handlers.current.onCarry()}
+        />
       )}
 
       <Rack
@@ -146,6 +168,8 @@ function World(props: SceneProps) {
         focus={props.focus}
         inspecting={props.inspecting}
         active={view === "rack"}
+        pickToken={props.pickToken}
+        anchor={anchor}
         onFocus={props.onFocus}
         onInspect={props.onInspect}
         onBack={props.onBack}

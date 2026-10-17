@@ -42,6 +42,7 @@ export default function PlayerApp() {
   const [inspecting, setInspecting] = useState(false);
   const [loaded, setLoaded] = useState<Track | null>(null);
   const [leaving, setLeaving] = useState(false);
+  const [pickToken, setPickToken] = useState(0);
   const [loading, setLoading] = useState(false);
   const [message, setMessage] = useState<string | null>(null);
   const [want, setWant] = useState(false);
@@ -55,6 +56,7 @@ export default function PlayerApp() {
   const progressRef = useRef(0);
   const requestRef = useRef(0);
   const pendingRef = useRef<string | null>(null);
+  const carriedRef = useRef(true);
   const pausedByUsRef = useRef(0);
   const ejectRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const fadeRef = useRef<ReturnType<typeof setInterval> | null>(null);
@@ -205,6 +207,12 @@ export default function PlayerApp() {
     }, 2500);
   }, [playerRef]);
 
+  const onCarry = useCallback(() => {
+    carriedRef.current = true;
+    setInspecting(false);
+    setView("deck");
+  }, []);
+
   const onLiftOff = useCallback(() => {
     stopPlayback();
   }, [stopPlayback]);
@@ -215,16 +223,24 @@ export default function PlayerApp() {
     if (ejectRef.current) clearTimeout(ejectRef.current);
     setMessage(null);
     setLeaving(false);
-    setInspecting(false);
-    setView("deck");
 
     if (loaded?.id === track.id) {
+      // Already on the platter: jump back and resume (ignored mid-pick).
+      if (!carriedRef.current) return;
+      setInspecting(false);
+      setView("deck");
       if (!wantRef.current) {
         updateWant(true);
         startPlayback();
       }
       return;
     }
+
+    // Stay at the rack while the disc slides out of its jacket; onCarry then
+    // pans the camera over to the turntable.
+    carriedRef.current = false;
+    setInspecting(true);
+    setPickToken((t) => t + 1);
 
     clearTimers();
     audibleRef.current = false;
@@ -389,11 +405,13 @@ export default function PlayerApp() {
             inspecting={inspecting}
             loadedId={loaded?.id ?? null}
             leaving={leaving}
+            pickToken={pickToken}
             want={want}
             progressRef={progressRef}
             onFocus={setFocus}
             onInspect={() => setInspecting(true)}
             onBack={goBack}
+            onCarry={onCarry}
             onNeedleDown={onNeedleDown}
             onLiftOff={onLiftOff}
           />

@@ -67,7 +67,11 @@ export function Turntable({ simRef, controlRef }: TurntableProps) {
     if (armLift.current) armLift.current.rotation.z = sim.armLift * 0.1;
     if (lever.current) lever.current.rotation.z = -sim.armLift * 0.6;
     if (led.current) {
-      led.current.emissiveIntensity = THREE.MathUtils.clamp(sim.platterSpeed / 2, 0, 1.6);
+      led.current.emissiveIntensity = THREE.MathUtils.clamp(
+        sim.platterSpeed / 2,
+        0,
+        1.6,
+      );
     }
   });
 
@@ -77,7 +81,11 @@ export function Turntable({ simRef, controlRef }: TurntableProps) {
     <group>
       {/* Plinth */}
       <mesh geometry={plinth} castShadow receiveShadow>
-        <meshStandardMaterial color="#161618" roughness={0.55} metalness={0.1} />
+        <meshStandardMaterial
+          color="#161618"
+          roughness={0.55}
+          metalness={0.1}
+        />
       </mesh>
       {[
         [-2.0, -1.55],
@@ -99,8 +107,14 @@ export function Turntable({ simRef, controlRef }: TurntableProps) {
         </mesh>
         <group ref={platter}>
           <mesh position={[0, 0.08, 0]} castShadow receiveShadow>
-            <cylinderGeometry args={[RECORD_RADIUS + 0.02, RECORD_RADIUS + 0.02, 0.16, 96]} />
-            <meshStandardMaterial color="#b9bdc6" metalness={0.9} roughness={0.32} />
+            <cylinderGeometry
+              args={[RECORD_RADIUS + 0.02, RECORD_RADIUS + 0.02, 0.16, 96]}
+            />
+            <meshStandardMaterial
+              color="#b9bdc6"
+              metalness={0.9}
+              roughness={0.32}
+            />
           </mesh>
           <mesh position={[0, 0.17, 0]}>
             <cylinderGeometry args={[1.46, 1.46, 0.02, 96]} />
@@ -108,11 +122,19 @@ export function Turntable({ simRef, controlRef }: TurntableProps) {
           </mesh>
           <mesh position={[RECORD_RADIUS - 0.06, 0.162, 0]}>
             <boxGeometry args={[0.12, 0.004, 0.05]} />
-            <meshStandardMaterial color="#222226" metalness={0.7} roughness={0.4} />
+            <meshStandardMaterial
+              color="#222226"
+              metalness={0.7}
+              roughness={0.4}
+            />
           </mesh>
           <mesh position={[0, 0.24, 0]}>
             <cylinderGeometry args={[0.022, 0.022, 0.14, 16]} />
-            <meshStandardMaterial color="#d6d8de" metalness={1} roughness={0.2} />
+            <meshStandardMaterial
+              color="#d6d8de"
+              metalness={1}
+              roughness={0.2}
+            />
           </mesh>
         </group>
       </group>
@@ -121,7 +143,11 @@ export function Turntable({ simRef, controlRef }: TurntableProps) {
       {[1.0, 1.4].map((x) => (
         <mesh key={x} position={[x, 0.012, 1.45]} castShadow>
           <cylinderGeometry args={[0.1, 0.1, 0.03, 24]} />
-          <meshStandardMaterial color="#2a2a2e" roughness={0.5} metalness={0.4} />
+          <meshStandardMaterial
+            color="#2a2a2e"
+            roughness={0.5}
+            metalness={0.4}
+          />
         </mesh>
       ))}
       <mesh position={[1.85, 0.015, 1.45]} castShadow>
@@ -155,11 +181,19 @@ export function Turntable({ simRef, controlRef }: TurntableProps) {
       <group position={[ARM.px, 0, ARM.pz]}>
         <mesh position={[0, 0.14, 0]} castShadow>
           <cylinderGeometry args={[0.2, 0.24, 0.28, 32]} />
-          <meshStandardMaterial color="#26262a" roughness={0.4} metalness={0.5} />
+          <meshStandardMaterial
+            color="#26262a"
+            roughness={0.4}
+            metalness={0.5}
+          />
         </mesh>
         <mesh position={[0, ARM.y - 0.02, 0]} castShadow>
           <cylinderGeometry args={[0.14, 0.14, 0.14, 32]} />
-          <meshStandardMaterial color="#b9bdc6" metalness={0.9} roughness={0.3} />
+          <meshStandardMaterial
+            color="#b9bdc6"
+            metalness={0.9}
+            roughness={0.3}
+          />
         </mesh>
 
         {/* Cue lever */}
@@ -167,24 +201,52 @@ export function Turntable({ simRef, controlRef }: TurntableProps) {
           <group ref={lever}>
             <mesh position={[0.18, 0, 0]} castShadow>
               <boxGeometry args={[0.36, 0.025, 0.05]} />
-              <meshStandardMaterial color="#c9ccd3" metalness={0.8} roughness={0.35} />
+              <meshStandardMaterial
+                color="#c9ccd3"
+                metalness={0.8}
+                roughness={0.35}
+              />
             </mesh>
           </group>
         </group>
 
         <group ref={armYaw} position={[0, ARM.y, 0]}>
           <group ref={armLift}>
-            <mesh rotation={[0, 0, Math.PI / 2]} position={[ARM.length / 2 - 0.05, 0, 0]} castShadow>
+            <mesh
+              rotation={[0, 0, Math.PI / 2]}
+              position={[ARM.length / 2 - 0.05, 0, 0]}
+              castShadow
+            >
               <cylinderGeometry args={[0.028, 0.028, ARM.length - 0.1, 16]} />
-              <meshStandardMaterial color="#c3c6ce" metalness={0.9} roughness={0.28} />
+              <meshStandardMaterial
+                color="#c3c6ce"
+                metalness={0.9}
+                roughness={0.28}
+              />
             </mesh>
-            <mesh rotation={[0, 0, Math.PI / 2]} position={[-0.3, 0, 0]} castShadow>
+            <mesh
+              rotation={[0, 0, Math.PI / 2]}
+              position={[-0.3, 0, 0]}
+              castShadow
+            >
               <cylinderGeometry args={[0.03, 0.03, 0.6, 16]} />
-              <meshStandardMaterial color="#c3c6ce" metalness={0.9} roughness={0.28} />
+              <meshStandardMaterial
+                color="#c3c6ce"
+                metalness={0.9}
+                roughness={0.28}
+              />
             </mesh>
-            <mesh rotation={[0, 0, Math.PI / 2]} position={[-0.58, 0, 0]} castShadow>
+            <mesh
+              rotation={[0, 0, Math.PI / 2]}
+              position={[-0.58, 0, 0]}
+              castShadow
+            >
               <cylinderGeometry args={[0.1, 0.1, 0.24, 32]} />
-              <meshStandardMaterial color="#202023" metalness={0.6} roughness={0.45} />
+              <meshStandardMaterial
+                color="#202023"
+                metalness={0.6}
+                roughness={0.45}
+              />
             </mesh>
             <group position={[ARM.length, 0, 0]} rotation={[0, 0.3, 0]}>
               <mesh position={[0.03, -0.01, 0]} castShadow>
@@ -197,7 +259,11 @@ export function Turntable({ simRef, controlRef }: TurntableProps) {
               </mesh>
               <mesh position={[0.1, -0.15, 0]}>
                 <coneGeometry args={[0.012, 0.06, 8]} />
-                <meshStandardMaterial color="#e8e8ea" metalness={1} roughness={0.1} />
+                <meshStandardMaterial
+                  color="#e8e8ea"
+                  metalness={1}
+                  roughness={0.1}
+                />
               </mesh>
             </group>
           </group>

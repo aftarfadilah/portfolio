@@ -1,4 +1,4 @@
-import { MathUtils } from "three";
+import { MathUtils, Quaternion, Vector3 } from "three";
 
 // World units: 1 unit = 10 cm. A 12" LP is 3 units across.
 export const PLATTER_CENTER = { x: -0.6, z: 0 };
@@ -151,4 +151,17 @@ export function stepPlatter(sim: Sim, dt: number) {
   if (target === 0 && sim.platterSpeed < 0.01) sim.platterSpeed = 0;
   sim.platterAngle =
     (sim.platterAngle + sim.platterSpeed * dt) % (Math.PI * 2);
+}
+
+/** World transform of the sleeve being inspected; the disc slides out of it. */
+export interface Anchor {
+  pos: Vector3;
+  quat: Quaternion;
+  scale: number;
+  /** The sleeve has finished coming forward and is facing the viewer. */
+  settled: boolean;
+}
+
+export function createAnchor(): Anchor {
+  return { pos: new Vector3(), quat: new Quaternion(), scale: 1, settled: false };
 }
