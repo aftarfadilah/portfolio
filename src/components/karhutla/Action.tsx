@@ -103,7 +103,7 @@ function LivePanel({ t, lang }: { t: T; lang: string }) {
           <>
             <p className={`${serif} mt-4 text-7xl leading-none tabular-nums`}>{fmt(live.data.total ?? 0, lang)}</p>
             <p className="mt-2 text-sm opacity-70">
-              {t("liveTotal")} · {t("liveBody")}
+              {t("liveTotal")} {t("liveBody")}
             </p>
           </>
         )}

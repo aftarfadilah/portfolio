@@ -315,7 +315,10 @@ export const C = {
     id: "Data langsung dimatikan pada deployment ini. Setel FIRMS_MAP_KEY (kunci gratis dari NASA FIRMS) untuk mengaktifkannya.",
   },
   liveErr: { en: "The satellite feed could not be reached right now.", id: "Data satelit tidak dapat dijangkau saat ini." },
-  liveBody: { en: "VIIRS detections over Indonesia, last 24 hours", id: "Deteksi VIIRS di Indonesia, 24 jam terakhir" },
+  liveBody: {
+    en: "from one satellite (VIIRS S-NPP) over Indonesia, last 24 hours. SiPongi merges several satellites, so its totals are higher.",
+    id: "dari satu satelit (VIIRS S-NPP) di Indonesia, 24 jam terakhir. SiPongi menggabungkan beberapa satelit, sehingga totalnya lebih tinggi.",
+  },
   liveTotal: { en: "detections", id: "deteksi" },
 
   // footer
