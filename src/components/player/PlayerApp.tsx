@@ -621,6 +621,13 @@ export default function PlayerApp() {
           />
         </div>
       </div>
+
+      <p className="pointer-events-none order-4 px-4 pb-3 text-center text-[10px] leading-snug text-muted-foreground/70 lg:absolute lg:inset-x-0 lg:bottom-1.5 lg:pb-0">
+        I don&apos;t own, host or store any music or artwork here. Everything
+        streams directly from YouTube through its official embedded player;
+        titles and cover art are loaded from YouTube, and all rights belong to
+        their respective owners. Not affiliated with or endorsed by YouTube.
+      </p>
     </div>
   );
 }
