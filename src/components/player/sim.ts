@@ -5,8 +5,6 @@ export const PLATTER_CENTER = { x: -0.6, z: 0 };
 export const RECORD_RADIUS = 1.5;
 export const TABLE_Y = -0.56;
 export const SEATED_Y = 0.19;
-export const DRAG_Y = 0.45;
-export const SHELF = { x: 0, y: TABLE_Y + 0.011, z: 3.6 };
 export const ARM = { px: 1.75, pz: -1.15, y: 0.33, length: 2.35 };
 
 const PLATTER_RPM = 100 / 3;
