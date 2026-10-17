@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
+import LangSwitch from "./LangSwitch";
 import {
   ENTRIES,
   HOTSPOTS,
@@ -208,12 +209,13 @@ const button =
 
 type Props = {
   lang: Lang;
+  onLang: (l: Lang) => void;
   sel: string | null; // a hotspot id, an entry id, or null for the index
   onSelect: (id: string | null) => void;
   onClose: () => void;
 };
 
-export default function WikiPanel({ lang, sel, onSelect, onClose }: Props) {
+export default function WikiPanel({ lang, onLang, sel, onSelect, onClose }: Props) {
   const ui = UI[lang];
   const hotspot = HOTSPOTS.find((h) => h.id === sel);
   const entry = ENTRIES.find((e) => e.id === (hotspot?.entry ?? sel));
@@ -243,6 +245,7 @@ export default function WikiPanel({ lang, sel, onSelect, onClose }: Props) {
           </>
         )}
         <span className="ml-auto" />
+        <LangSwitch lang={lang} onLang={onLang} className="text-[10px]" />
         <button type="button" className={button} onClick={onClose} aria-label={ui.closeAria}>
           {ui.close}
         </button>

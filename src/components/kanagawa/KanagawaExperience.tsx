@@ -2,8 +2,9 @@
 
 import Link from "next/link";
 import { useEffect, useMemo, useState } from "react";
-import { HOTSPOTS, LANGS, UI, type Spot } from "@/data/kanagawa-wiki";
+import { HOTSPOTS, UI, type Spot } from "@/data/kanagawa-wiki";
 import KanagawaWave from "./KanagawaWave";
+import LangSwitch from "./LangSwitch";
 import { useLang } from "./useLang";
 import WikiPanel from "./WikiPanel";
 
@@ -62,36 +63,7 @@ export default function KanagawaExperience() {
         >
           ← portfolio
         </Link>
-        <div className="flex items-start gap-3">
-          <ul className="hidden gap-3 rounded bg-[#16161D]/70 px-3 py-1.5 backdrop-blur xl:flex">
-            {SWATCHES.map(([name, color]) => (
-              <li key={name} className="flex items-center gap-1.5 text-[#727169]">
-                <span className="h-2 w-2 rounded-full" style={{ background: color }} />
-                {name}
-              </li>
-            ))}
-          </ul>
-          <div
-            role="group"
-            aria-label={ui.langAria}
-            className="pointer-events-auto flex overflow-hidden rounded border border-[#2A2A37] bg-[#16161D]/80 backdrop-blur"
-          >
-            {LANGS.map((l) => (
-              <button
-                key={l.id}
-                type="button"
-                title={l.name}
-                aria-pressed={lang === l.id}
-                onClick={() => setLang(l.id)}
-                className={`px-2 py-1 tracking-widest transition-colors ${
-                  lang === l.id ? "bg-[#E6C384] text-[#16161D]" : "text-[#7E9CD8] hover:text-[#DCD7BA]"
-                }`}
-              >
-                {l.label}
-              </button>
-            ))}
-          </div>
-        </div>
+        <LangSwitch lang={lang} onLang={setLang} />
       </header>
 
       <footer className="pointer-events-none absolute bottom-5 left-5 right-5 z-10 flex w-fit max-w-[calc(100%-2.5rem)] flex-col gap-1 rounded bg-[#16161D]/70 px-3 py-2 text-[11px] leading-relaxed text-[#727169] backdrop-blur lg:max-w-[calc(100%-480px)]">
@@ -99,10 +71,18 @@ export default function KanagawaExperience() {
           神奈川沖浪裏 <span className="text-[#E6C384]">KANAGAWA</span>
         </h1>
         <p>{ui.footer}</p>
+        <ul className="hidden flex-wrap gap-x-3 gap-y-1 pt-1 sm:flex">
+          {SWATCHES.map(([name, color]) => (
+            <li key={name} className="flex items-center gap-1.5">
+              <span className="h-2 w-2 rounded-full" style={{ background: color }} />
+              {name}
+            </li>
+          ))}
+        </ul>
       </footer>
 
       {open ? (
-        <WikiPanel lang={lang} sel={sel} onSelect={pick} onClose={close} />
+        <WikiPanel lang={lang} onLang={setLang} sel={sel} onSelect={pick} onClose={close} />
       ) : (
         <button
           type="button"
