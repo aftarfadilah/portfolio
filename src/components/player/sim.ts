@@ -37,6 +37,7 @@ export type ArmPhase =
   | "swing-in"
   | "lower"
   | "play"
+  | "held"
   | "raise-out"
   | "swing-out"
   | "lower-out";
@@ -63,9 +64,13 @@ export function createSim(): Sim {
 
 export interface ArmControl {
   want: boolean;
+  /** The listener has the cue lever up: the arm hovers and the music pauses. */
+  held: boolean;
   progress: number;
   onNeedleDown: () => void;
   onLiftOff: () => void;
+  /** The lever just lifted the needle off a playing record. */
+  onHold: () => void;
 }
 
 const OUT_PHASES: ArmPhase[] = ["raise-out", "swing-out", "lower-out"];
@@ -104,6 +109,10 @@ export function stepArm(sim: Sim, ctl: ArmControl, dt: number) {
       break;
     case "lower":
       if (!wantIn) return retreat();
+      if (ctl.held) {
+        sim.armPhase = "held";
+        break;
+      }
       sim.armYaw = MathUtils.damp(sim.armYaw, playYaw, 8, dt);
       sim.armLift = MathUtils.damp(sim.armLift, 0, 5, dt);
       if (sim.armLift < 0.03) {
@@ -114,7 +123,22 @@ export function stepArm(sim: Sim, ctl: ArmControl, dt: number) {
       break;
     case "play":
       if (!wantIn) return retreat();
+      if (ctl.held) {
+        sim.armPhase = "held";
+        ctl.onHold();
+        break;
+      }
       sim.armYaw = MathUtils.damp(sim.armYaw, playYaw, 8, dt);
+      break;
+    case "held":
+      // Hovering over the groove until the lever comes back down.
+      if (!wantIn) return retreat();
+      if (!ctl.held) {
+        sim.armPhase = "lower";
+        break;
+      }
+      sim.armYaw = MathUtils.damp(sim.armYaw, playYaw, 8, dt);
+      sim.armLift = MathUtils.damp(sim.armLift, 1, 7, dt);
       break;
     case "raise-out":
       if (wantIn) sim.armPhase = "raise-in";
@@ -124,7 +148,8 @@ export function stepArm(sim: Sim, ctl: ArmControl, dt: number) {
     case "swing-out":
       if (wantIn) sim.armPhase = "raise-in";
       sim.armYaw = MathUtils.damp(sim.armYaw, ARM_YAW_REST, 3, dt);
-      if (Math.abs(sim.armYaw - ARM_YAW_REST) < 0.015) sim.armPhase = "lower-out";
+      if (Math.abs(sim.armYaw - ARM_YAW_REST) < 0.015)
+        sim.armPhase = "lower-out";
       break;
     case "lower-out":
       if (wantIn) sim.armPhase = "raise-in";
@@ -149,8 +174,7 @@ export function stepPlatter(sim: Sim, dt: number) {
     dt,
   );
   if (target === 0 && sim.platterSpeed < 0.01) sim.platterSpeed = 0;
-  sim.platterAngle =
-    (sim.platterAngle + sim.platterSpeed * dt) % (Math.PI * 2);
+  sim.platterAngle = (sim.platterAngle + sim.platterSpeed * dt) % (Math.PI * 2);
 }
 
 /** World transform of the sleeve being inspected; the disc slides out of it. */
@@ -163,5 +187,10 @@ export interface Anchor {
 }
 
 export function createAnchor(): Anchor {
-  return { pos: new Vector3(), quat: new Quaternion(), scale: 1, settled: false };
+  return {
+    pos: new Vector3(),
+    quat: new Quaternion(),
+    scale: 1,
+    settled: false,
+  };
 }

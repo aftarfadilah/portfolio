@@ -3,6 +3,7 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { useFrame } from "@react-three/fiber";
 import * as THREE from "three";
+import { sfx } from "./audio";
 import { loadLabelTexture, makeGrooveTexture } from "./textures";
 import {
   PLATTER_CENTER,
@@ -95,6 +96,7 @@ export function Vinyl({
     onCarryRef.current = onCarry;
   });
   const rigRef = useRef<Rig | null>(null);
+  const slid = useRef(false);
 
   const [label, setLabel] = useState<THREE.Texture | null>(null);
   const grooves = useMemo(() => makeGrooveTexture(), []);
@@ -163,6 +165,10 @@ export function Vinyl({
         g.quaternion.copy(anchor.quat).multiply(r.faceUp);
         g.scale.setScalar(anchor.scale);
         g.visible = true;
+        if (!slid.current) {
+          slid.current = true;
+          sfx.sleeveSlide();
+        }
         if (clock.current >= OUT_TIME) {
           r.from.copy(g.position);
           r.qFrom.copy(g.quaternion);
@@ -204,6 +210,7 @@ export function Vinyl({
         if (t >= 1) {
           phase.current = "seated";
           sim.discSeated = true;
+          sfx.discPlace();
         }
         break;
       }

@@ -3,14 +3,17 @@
 import { useMemo, useRef } from "react";
 import { useFrame } from "@react-three/fiber";
 import * as THREE from "three";
+import { sfx } from "./audio";
 import {
   ARM,
   ARM_YAW_REST,
   PLATTER_CENTER,
+  PLATTER_SPEED,
   RECORD_RADIUS,
   stepArm,
   stepPlatter,
   type ArmControl,
+  type ArmPhase,
   type Sim,
 } from "./sim";
 
@@ -46,21 +49,35 @@ function usePlinthGeometry() {
 interface TurntableProps {
   simRef: React.RefObject<Sim>;
   controlRef: React.RefObject<ArmControl>;
+  onToggleHold: () => void;
 }
 
-export function Turntable({ simRef, controlRef }: TurntableProps) {
+export function Turntable({
+  simRef,
+  controlRef,
+  onToggleHold,
+}: TurntableProps) {
   const plinth = usePlinthGeometry();
   const platter = useRef<THREE.Group>(null);
   const armYaw = useRef<THREE.Group>(null);
   const armLift = useRef<THREE.Group>(null);
   const lever = useRef<THREE.Group>(null);
   const led = useRef<THREE.MeshStandardMaterial>(null);
+  const lastPhase = useRef<ArmPhase>("rest");
 
   useFrame((_, delta) => {
     const dt = Math.min(delta, 0.05);
     const sim = simRef.current;
     stepArm(sim, controlRef.current, dt);
     stepPlatter(sim, dt);
+
+    if (sim.armPhase !== lastPhase.current) {
+      if (sim.armPhase === "rest" && lastPhase.current === "lower-out") {
+        sfx.armRest();
+      }
+      lastPhase.current = sim.armPhase;
+    }
+    sfx.setMotor(sim.platterSpeed / PLATTER_SPEED);
 
     if (platter.current) platter.current.rotation.y = sim.platterAngle;
     if (armYaw.current) armYaw.current.rotation.y = sim.armYaw;
@@ -198,6 +215,22 @@ export function Turntable({ simRef, controlRef }: TurntableProps) {
 
         {/* Cue lever */}
         <group position={[0.18, 0.2, 0.2]}>
+          <mesh
+            position={[0.2, 0.02, 0]}
+            onClick={(e) => {
+              e.stopPropagation();
+              onToggleHold();
+            }}
+            onPointerOver={() => {
+              document.body.style.cursor = "pointer";
+            }}
+            onPointerOut={() => {
+              document.body.style.cursor = "";
+            }}
+          >
+            <boxGeometry args={[0.6, 0.22, 0.3]} />
+            <meshBasicMaterial transparent opacity={0} depthWrite={false} />
+          </mesh>
           <group ref={lever}>
             <mesh position={[0.18, 0, 0]} castShadow>
               <boxGeometry args={[0.36, 0.025, 0.05]} />
