@@ -1,0 +1,78 @@
+/* Keyframes for the karhutla story. Motion is switched off under prefers-reduced-motion. */
+
+.sunPulse {
+  transform-box: fill-box;
+  transform-origin: center;
+  animation: sunPulse 6s ease-in-out infinite;
+}
+@keyframes sunPulse {
+  0%, 100% { transform: scale(1); opacity: 0.55; }
+  50% { transform: scale(1.12); opacity: 0.85; }
+}
+
+.smokeA, .smokeB, .smokeC {
+  transform-box: fill-box;
+  transform-origin: center;
+}
+.smokeA { animation: driftA 38s ease-in-out infinite alternate; }
+.smokeB { animation: driftB 52s ease-in-out infinite alternate; }
+.smokeC { animation: driftA 64s ease-in-out infinite alternate-reverse; }
+@keyframes driftA {
+  from { transform: translateX(-6%) scale(1); }
+  to { transform: translateX(8%) scale(1.15); }
+}
+@keyframes driftB {
+  from { transform: translateX(7%) scale(1.1); }
+  to { transform: translateX(-9%) scale(0.95); }
+}
+
+.ember {
+  animation: rise linear infinite;
+  transform-box: fill-box;
+}
+@keyframes rise {
+  0% { transform: translate(0, 0); opacity: 0; }
+  12% { opacity: 0.9; }
+  100% { transform: translate(var(--dx, 30px), -520px); opacity: 0; }
+}
+
+.scan {
+  animation: scan 7s linear infinite;
+}
+@keyframes scan {
+  from { transform: translateX(0); }
+  to { transform: translateX(var(--span, 600px)); }
+}
+
+.pulse {
+  transform-box: fill-box;
+  transform-origin: center;
+  animation: dotPulse 2.4s ease-in-out infinite;
+}
+@keyframes dotPulse {
+  0%, 100% { transform: scale(1); }
+  50% { transform: scale(1.7); }
+}
+
+.cue {
+  animation: cue 2s ease-in-out infinite;
+}
+@keyframes cue {
+  0%, 100% { transform: translateY(0); opacity: 0.5; }
+  50% { transform: translateY(6px); opacity: 1; }
+}
+
+.dash {
+  stroke-dasharray: 6 8;
+  animation: dash 1.4s linear infinite;
+}
+@keyframes dash {
+  to { stroke-dashoffset: -28; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .sunPulse, .smokeA, .smokeB, .smokeC, .ember, .scan, .pulse, .cue, .dash {
+    animation: none;
+  }
+  .ember { opacity: 0.5; }
+}

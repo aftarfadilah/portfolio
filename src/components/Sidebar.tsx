@@ -31,6 +31,7 @@ function useInstallerExt() {
 const apps = [
   { href: "/player", name: "turntable", title: "Open the turntable", dot: "bg-syntax-function" },
   { href: "/kanagawa", name: "kanagawa", title: "Open the Great Wave", dot: "bg-syntax-string" },
+  { href: "/karhutla", name: "karhutla", title: "Open the karhutla story", dot: "bg-orange-400" },
 ];
 
 export default function Sidebar({ activeSection, onNavigate, isOpen, onClose }: SidebarProps) {
