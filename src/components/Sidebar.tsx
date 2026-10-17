@@ -19,20 +19,25 @@ function FileIcon({ icon }: { icon: "tsx" | "json" | "md" }) {
 
 const noopSubscribe = () => () => {};
 
-/** The "installer" that matches the visitor's OS: .dmg on Apple devices, .exe elsewhere. */
-function useInstallerName() {
+/** The "installer" extension that matches the visitor's OS: .dmg on Apple devices, .exe elsewhere. */
+function useInstallerExt() {
   return useSyncExternalStore(
     noopSubscribe,
-    () => (/Mac|iPhone|iPad|iPod/i.test(navigator.userAgent) ? "turntable.dmg" : "turntable.exe"),
-    () => "turntable.exe",
+    () => (/Mac|iPhone|iPad|iPod/i.test(navigator.userAgent) ? "dmg" : "exe"),
+    () => "exe",
   );
 }
+
+const apps = [
+  { href: "/player", name: "turntable", title: "Open the turntable", dot: "bg-syntax-function" },
+  { href: "/kanagawa", name: "kanagawa", title: "Open the Great Wave", dot: "bg-syntax-string" },
+];
 
 export default function Sidebar({ activeSection, onNavigate, isOpen, onClose }: SidebarProps) {
   const [portfolioOpen, setPortfolioOpen] = useState(true);
   const [srcOpen, setSrcOpen] = useState(true);
   const [appOpen, setAppOpen] = useState(true);
-  const installer = useInstallerName();
+  const ext = useInstallerExt();
 
   const content = (
     <div className="flex flex-col h-full">
@@ -85,16 +90,18 @@ export default function Sidebar({ activeSection, onNavigate, isOpen, onClose }: 
             app
           </button>
 
-          {appOpen && (
-            <Link
-              href="/player"
-              title="Open the turntable"
-              className="text-sm font-mono py-1 px-2 ml-8 mr-2 rounded flex items-center gap-2 text-left text-muted-foreground hover:bg-muted/50 transition-colors"
-            >
-              <span className="w-2 h-2 rounded-full bg-syntax-function shrink-0" />
-              {installer}
-            </Link>
-          )}
+          {appOpen &&
+            apps.map((app) => (
+              <Link
+                key={app.href}
+                href={app.href}
+                title={app.title}
+                className="text-sm font-mono py-1 px-2 ml-8 mr-2 rounded flex items-center gap-2 text-left text-muted-foreground hover:bg-muted/50 transition-colors"
+              >
+                <span className={`w-2 h-2 rounded-full ${app.dot} shrink-0`} />
+                {app.name}.{ext}
+              </Link>
+            ))}
         </>
       )}
     </div>
