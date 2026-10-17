@@ -1,0 +1,5 @@
+.serif {
+  font-family: var(--font-serif), "Iowan Old Style", Georgia, serif;
+  font-weight: 400;
+  letter-spacing: -0.015em;
+}
