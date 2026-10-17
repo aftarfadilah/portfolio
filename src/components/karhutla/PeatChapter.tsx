@@ -39,18 +39,18 @@ export default function PeatChapter({ t, scroller }: { t: T; scroller: RefObject
   const [title, body] = STEPS[step];
 
   return (
-    <section id="ch-3" ref={section} className="relative h-[520vh]">
+    <section id="ch-3" ref={section} className="relative h-[420vh]">
       <div className="sticky top-0 h-screen overflow-hidden">
         <div className="absolute inset-0 bg-[#1d3248]">
           {gl && <PeatScene progress={scrollYProgress} active={near} still={reduced} />}
         </div>
         <div className="pointer-events-none absolute inset-0 bg-gradient-to-t from-black/70 via-transparent to-black/40" />
 
-        <div className="relative z-10 mx-auto flex h-full max-w-6xl flex-col justify-between px-6 pb-10 pt-24">
+        <div className="relative z-10 mx-auto flex h-full max-w-6xl flex-col justify-between px-6 pb-6 pt-20 sm:pb-10 sm:pt-24">
           <Heading kicker={t("c4Kicker")} title={t("c4Title")} />
 
           <div className="flex flex-col items-start justify-between gap-6 lg:flex-row lg:items-end">
-            <div className="max-w-md rounded-2xl border border-white/15 bg-black/55 p-6 backdrop-blur-md" aria-live="polite">
+            <div className="max-w-md rounded-2xl border border-white/15 bg-black/60 p-4 backdrop-blur-md sm:p-6" aria-live="polite">
               <p className="font-mono text-[11px] uppercase tracking-widest text-orange-300">
                 {step + 1} / {STEPS.length}
               </p>
@@ -62,14 +62,14 @@ export default function PeatChapter({ t, scroller }: { t: T; scroller: RefObject
                   exit={{ opacity: 0, y: -10 }}
                   transition={{ duration: 0.25 }}
                 >
-                  <h3 className="mt-2 text-2xl font-semibold text-white">{t(title)}</h3>
-                  <p className="mt-3 leading-relaxed text-stone-200">{t(body)}</p>
+                  <h3 className="mt-2 text-xl font-semibold text-white sm:text-2xl">{t(title)}</h3>
+                  <p className="mt-2 text-sm leading-relaxed text-stone-200 sm:mt-3 sm:text-base">{t(body)}</p>
                 </motion.div>
               </AnimatePresence>
               {!gl && <p className="mt-4 text-sm text-amber-200">{t("noGl")}</p>}
             </div>
 
-            <div className="rounded-xl border border-white/15 bg-black/55 p-4 text-sm text-stone-200 backdrop-blur-md">
+            <div className="hidden rounded-xl border border-white/15 bg-black/55 p-4 text-sm text-stone-200 backdrop-blur-md sm:block">
               <ul className="space-y-2">
                 <li className="flex items-center gap-2">
                   <span className="h-1 w-6 rounded bg-[#5ec8ff]" />

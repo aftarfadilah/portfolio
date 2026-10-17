@@ -10,6 +10,8 @@ type L = { en: string; id: string };
 
 /** Figures quoted on the page. Every one is from SiPongi / Kementerian Kehutanan via Databoks. */
 export const FIGURES = {
+  deathsPerYear: 33100, // Hein et al. 2022, adults, modelled
+  ariTreated: 170000, // health ministry via The Star, Aug–Sep 2026 ("more than")
   peakDay: 22293, // hotspots in 24 h, 21 Sep 2026
   peakDate: "21 Sep 2026",
   centralKalimantan: 11011, // 20 Sep 2026 (of 20,802 nationwide)
@@ -45,6 +47,26 @@ export const SOURCES: { label: string; href: string }[] = [
   {
     label: "Databoks: priority provinces, 21–22 Sep 2026",
     href: "https://databoks.katadata.co.id/datapublish/2026/09/23/update-hotspot-di-6-provinsi-prioritas-penanganan-karhutla-21-september-2026",
+  },
+  {
+    label: "Databoks: indicated burned land in the priority provinces, 14 Sep 2026",
+    href: "https://databoks.katadata.co.id/datapublish/2026/09/14/indikasi-lahan-terbakar-di-6-provinsi-prioritas-penanganan-karhutla-14-september-2026",
+  },
+  {
+    label: "Goodstats: provinces with the largest burned area",
+    href: "https://data.goodstats.id/statistic/kalimantan-barat-jadi-provinsi-dengan-karhutla-terluas-capai-38-ribu-ha-7ocLY",
+  },
+  {
+    label: "Hein et al. 2022: The health impacts of Indonesian peatland fires",
+    href: "https://pubmed.ncbi.nlm.nih.gov/35790967/",
+  },
+  {
+    label: "The Star, 13 Oct 2026: Damaged and drained, Indonesia's peatlands go up in smoke",
+    href: "https://www.thestar.com.my/aseanplus/aseanplus-news/2026/10/13/damaged-and-drained-indonesia039s-peatlands-go-up-in-smoke",
+  },
+  {
+    label: "Permen LHK P.14/2020 (ISPU)",
+    href: "https://peraturan.go.id/files/bn774-2020.pdf",
   },
   { label: "NASA FIRMS (active fire data)", href: "https://firms.modaps.eosdis.nasa.gov/" },
   {
@@ -158,8 +180,8 @@ export const C = {
   },
   p5T: { en: "Then it goes underground", id: "Lalu ia merambat ke bawah tanah" },
   p5B: {
-    en: "The fire creeps down into the dry peat and smoulders there, producing thick smoke even after the flames at the surface are gone. It stops only where the peat is wet again.",
-    id: "Api merambat turun ke gambut kering dan membara di sana, menghasilkan asap pekat meski nyala di permukaan sudah padam. Ia berhenti hanya ketika gambut kembali basah.",
+    en: "The fire creeps down into the dry peat and smoulders there, sometimes for weeks, producing thick smoke even after the flames at the surface are gone. It stops only where the peat is wet again.",
+    id: "Api merambat turun ke gambut kering dan membara di sana, kadang berminggu-minggu, menghasilkan asap pekat meski nyala di permukaan sudah padam. Ia berhenti hanya ketika gambut kembali basah.",
   },
   legWater: { en: "Water table", id: "Muka air" },
   legPeat: { en: "Peat", id: "Gambut" },
@@ -167,6 +189,20 @@ export const C = {
   noGl: {
     en: "Your browser could not start 3D graphics, so the model is not shown. The five steps above still tell the story.",
     id: "Peramban kamu tidak dapat menjalankan grafis 3D, sehingga model tidak ditampilkan. Kelima langkah di atas tetap menceritakan kisahnya.",
+  },
+
+  c3AreaT: { en: "Hotspots are not hectares", id: "Titik panas bukan hektare" },
+  c3AreaB: {
+    en: "Burned area is a separate measure. SiPongi's indicated burned land in the six priority provinces stood at about 85,766 ha on 14 September 2026. The province with the most hotspots is not automatically the one with the most burned land: a ranking from that period put West Kalimantan first, at about 38,311 ha.",
+    id: "Luas terbakar adalah ukuran yang berbeda. Indikasi lahan terbakar SiPongi di enam provinsi prioritas sekitar 85.766 ha per 14 September 2026. Provinsi dengan titik panas terbanyak belum tentu yang lahan terbakarnya terluas: peringkat pada periode itu menempatkan Kalimantan Barat teratas, sekitar 38.311 ha.",
+  },
+  c5S1: {
+    en: "estimated premature deaths a year (adults) from long-term peat-fire smoke in Sumatra and Kalimantan. The authors' range is 19,900 to 64,800. A 2022 modelling study, not a count.",
+    id: "perkiraan kematian dini per tahun (dewasa) akibat paparan jangka panjang asap kebakaran gambut di Sumatera dan Kalimantan. Rentang penulis: 19.900 hingga 64.800. Studi pemodelan 2022, bukan hitungan kasus.",
+  },
+  c5S2: {
+    en: "people treated for acute respiratory infections in August and September 2026, according to Indonesia's health ministry as reported by The Star.",
+    id: "orang dirawat karena infeksi saluran pernapasan akut pada Agustus dan September 2026, menurut Kementerian Kesehatan seperti dilaporkan The Star.",
   },
 
   // 5 · smoke

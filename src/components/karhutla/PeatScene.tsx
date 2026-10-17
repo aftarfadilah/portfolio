@@ -327,10 +327,16 @@ function Rig({ progress }: { progress: MotionValue<number> }) {
     const k = 1 - Math.exp(-dt * 3);
     const tx = Math.sin(p * 1.3) * 1.3 + state.pointer.x * 0.5;
     const ty = 1.8 + p * 0.4 + state.pointer.y * 0.25;
-    const tz = 10.2 - p * 1.2;
+    // Portrait screens see less width: back off so the canal and most of each block stay in frame.
+    const fit = (8.6 / (0.69 * state.viewport.aspect)) * 0.62;
+    const tz = Math.max(10.2 - p * 1.2, fit - p * 1.5);
     state.camera.position.x += (tx - state.camera.position.x) * k;
     state.camera.position.y += (ty - state.camera.position.y) * k;
     state.camera.position.z += (tz - state.camera.position.z) * k;
+    if (state.scene.fog instanceof THREE.Fog) {
+      state.scene.fog.near = state.camera.position.z - 1;
+      state.scene.fog.far = state.camera.position.z + 13;
+    }
     state.camera.lookAt(0, 0.45, 0);
 
     if (light.current) light.current.intensity = 14 * d.flame + 6 * d.fire;

@@ -83,7 +83,7 @@ export default function KarhutlaStory() {
         <HotspotLens t={t} />
         <FireMap t={t} lang={lang} />
         <PeatChapter t={t} scroller={scroller} />
-        <SmokeDrift t={t} />
+        <SmokeDrift t={t} lang={lang} />
         <People t={t} />
         <Action t={t} lang={lang} />
       </main>

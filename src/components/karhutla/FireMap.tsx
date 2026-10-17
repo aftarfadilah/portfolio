@@ -85,7 +85,12 @@ export default function FireMap({ t, lang }: { t: T; lang: string }) {
         </p>
       </div>
 
-      <div className="mt-10 rounded-2xl border border-white/10 bg-white/[0.03] p-6">
+      <div className="mt-10 rounded-2xl border border-orange-400/30 bg-orange-500/[0.06] p-6">
+        <h3 className="text-lg font-medium text-white">{t("c3AreaT")}</h3>
+        <p className="mt-2 max-w-3xl text-sm leading-relaxed text-stone-300">{t("c3AreaB")}</p>
+      </div>
+
+      <div className="mt-6 rounded-2xl border border-white/10 bg-white/[0.03] p-6">
         <h3 className="font-mono text-[11px] uppercase tracking-widest text-stone-400">{t("c3Bars")}</h3>
         <ul className="mt-5 space-y-3">
           {PROVINCES.map((p, i) => (

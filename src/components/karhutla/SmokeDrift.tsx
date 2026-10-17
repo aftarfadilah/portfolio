@@ -2,9 +2,9 @@
 
 import { useReducedMotion } from "framer-motion";
 import { useState } from "react";
-import { ISPU, MAP, px } from "@/data/karhutla";
+import { FIGURES, ISPU, MAP, px } from "@/data/karhutla";
 import styles from "./karhutla.module.css";
-import { Heading, LandMass, type T } from "./shared";
+import { Heading, LandMass, fmt, type T } from "./shared";
 
 // Smoke sources and the way the dry-season wind (from the south-east) carries it.
 const ROUTES: { from: [number, number]; via: [number, number]; to: [number, number]; n: number }[] = [
@@ -24,7 +24,7 @@ const WIND = [
   { lon: 125, lat: -6 },
 ] as const;
 
-export default function SmokeDrift({ t }: { t: T }) {
+export default function SmokeDrift({ t, lang }: { t: T; lang: string }) {
   const [v, setV] = useState(160);
   const reduced = useReducedMotion();
   const band = ISPU.find((b) => v <= b.max) ?? ISPU[ISPU.length - 1];
@@ -144,6 +144,15 @@ export default function SmokeDrift({ t }: { t: T }) {
           </p>
           <p className="mt-4 text-xs leading-relaxed text-stone-500">{t("ispuNote")}</p>
         </div>
+      </div>
+
+      <div className="mt-8 grid gap-6 md:grid-cols-2">
+        {([[`~${fmt(FIGURES.deathsPerYear, lang)}`, "c5S1"], [`>${fmt(FIGURES.ariTreated, lang)}`, "c5S2"]] as const).map(([n, k]) => (
+          <div key={k} className="rounded-2xl border border-white/10 bg-white/[0.03] p-6">
+            <p className="text-4xl font-bold tabular-nums text-white">{n}</p>
+            <p className="mt-2 text-sm leading-relaxed text-stone-300">{t(k)}</p>
+          </div>
+        ))}
       </div>
     </section>
   );
