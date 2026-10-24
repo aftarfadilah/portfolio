@@ -5,17 +5,16 @@ import { useFrame, useThree } from "@react-three/fiber";
 import * as THREE from "three";
 import type { Track } from "./library";
 import { TABLE_Y, type Anchor } from "./sim";
-import { loadLabelTexture, makeBackTexture, makeWoodTexture } from "./textures";
+import { loadLabelTexture, makeBackTexture } from "./textures";
 
 export const RACK_X = -20;
 const SLEEVE = 3.1;
-const BENCH_TOP = TABLE_Y + 0.3;
-// Sleeves stand on the bench; nothing is sunk into it.
-const SLEEVE_Y = BENCH_TOP + SLEEVE / 2 + 0.03;
-const NEIGHBOUR_GAP = 1.9;
-const PACK_GAP = 0.42;
-const WINDOW = 18;
-const LOAD_RADIUS = 10;
+// The focused sleeve floats at this height; the others climb away from it.
+export const SLEEVE_Y = TABLE_Y + 2.7;
+const NEIGHBOUR_GAP = 3.9;
+const PACK_GAP = 2.0;
+const WINDOW = 6;
+const LOAD_RADIUS = 5;
 const INSPECT_DISTANCE = 6.2;
 const INSPECT_SCALE = 0.78;
 
@@ -24,19 +23,22 @@ interface Spin {
   y: number;
 }
 
-/** Where a sleeve sits for a (fractional) distance from the focused one. */
+/**
+ * Where a sleeve sits for a (fractional) distance from the focused one: a
+ * diagonal staircase. Later records climb up and to the right, earlier ones
+ * step down and to the left, and both recede into the distance.
+ */
 function layout(d: number) {
   const absd = Math.abs(d);
   const sign = Math.sign(d);
   const lean = Math.min(absd, 1);
+  const run =
+    absd < 1 ? absd * NEIGHBOUR_GAP : NEIGHBOUR_GAP + (absd - 1) * PACK_GAP;
   return {
-    x:
-      RACK_X +
-      (absd < 1
-        ? d * NEIGHBOUR_GAP
-        : sign * (NEIGHBOUR_GAP + (absd - 1) * PACK_GAP)),
-    z: -lean * 0.9,
-    ry: -sign * lean * 1.05,
+    x: RACK_X + sign * run,
+    y: d * (d > 0 ? 0.85 : 0.5),
+    z: -absd * 1.5,
+    ry: -sign * lean * 0.5,
     absd,
   };
 }
@@ -135,7 +137,7 @@ function Sleeve({
     if (!g) return;
     const dt = Math.min(delta, 0.05);
     const d = index - pos.current;
-    const { x, z, ry, absd } = layout(d);
+    const { x, y, z, ry, absd } = layout(d);
 
     if (inspecting && focused) {
       const { forward, up, goal, quat, euler, spinQuat } = scratch;
@@ -172,7 +174,9 @@ function Sleeve({
 
     // Sleeves near the ends of the loaded window shrink away so they never pop.
     const edge = THREE.MathUtils.clamp((WINDOW + 0.5 - absd) / 2, 0, 1);
-    const targetScale = inspecting ? 0.001 : edge;
+    // The selected record is a little larger than the rest.
+    const grow = 1 + 0.75 * Math.max(0, 1 - absd);
+    const targetScale = inspecting ? 0.001 : edge * grow;
     const lift = focused && !inspecting ? 0.12 : 0;
     scratch.euler.set(0, ry, 0);
     scratch.quat.setFromEuler(scratch.euler);
@@ -180,14 +184,14 @@ function Sleeve({
     if (!placed.current) {
       // First frame: appear exactly where the layout puts this sleeve.
       placed.current = true;
-      g.position.set(x, SLEEVE_Y + lift, z);
+      g.position.set(x, SLEEVE_Y + y + lift, z);
       g.quaternion.copy(scratch.quat);
       g.scale.setScalar(targetScale);
     } else {
       g.position.x = THREE.MathUtils.damp(g.position.x, x, 12, dt);
       g.position.y = THREE.MathUtils.damp(
         g.position.y,
-        SLEEVE_Y + lift,
+        SLEEVE_Y + y + lift,
         10,
         dt,
       );
@@ -272,8 +276,6 @@ export function Rack({
   const dragFocus = useRef<number | null>(null);
   const spin = useRef({ target: { x: 0, y: 0 }, current: { x: 0, y: 0 } });
   const light = useRef<THREE.PointLight>(null);
-  const wood = useMemo(() => makeWoodTexture(), []);
-  useEffect(() => () => wood.dispose(), [wood]);
 
   const state = useRef({
     records,
@@ -458,32 +460,6 @@ export function Rack({
         intensity={34}
         color="#9db4ff"
       />
-
-      {/* Back wall */}
-      <mesh position={[RACK_X, 4, -3.4]}>
-        <planeGeometry args={[28, 16]} />
-        <meshStandardMaterial color="#1a1c28" roughness={0.9} />
-      </mesh>
-
-      {/* Wooden bench the sleeves stand on, with low rails so nothing clips */}
-      <group position={[RACK_X, TABLE_Y, -0.6]}>
-        <mesh position={[0, 0.15, 0]} receiveShadow>
-          <boxGeometry args={[18, 0.3, 4.6]} />
-          <meshStandardMaterial map={wood} roughness={0.65} />
-        </mesh>
-        {[2.2, -2.2].map((z) => (
-          <mesh key={z} position={[0, 0.3 + 0.11, z]}>
-            <boxGeometry args={[18, 0.22, 0.14]} />
-            <meshStandardMaterial map={wood} roughness={0.55} color="#c9a07c" />
-          </mesh>
-        ))}
-        {[-9, 9].map((x) => (
-          <mesh key={x} position={[x, 0.55, 0]}>
-            <boxGeometry args={[0.3, 1.1, 4.8]} />
-            <meshStandardMaterial map={wood} roughness={0.65} />
-          </mesh>
-        ))}
-      </group>
 
       {visible.map((track, i) => (
         <Sleeve

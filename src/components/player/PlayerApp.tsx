@@ -1,5 +1,6 @@
 "use client";
 
+import PosterChrome from "./PosterChrome";
 import Link from "next/link";
 import { useCallback, useEffect, useRef, useState } from "react";
 import { parseYouTubeLink } from "@/lib/youtube";
@@ -448,9 +449,9 @@ export default function PlayerApp() {
   const onDeck = view === "deck";
 
   const pill =
-    "pointer-events-auto flex items-center gap-2 rounded-full border border-border bg-card/90 px-3 py-2 text-xs font-medium text-foreground backdrop-blur transition-colors hover:border-primary";
+    "pointer-events-auto flex items-center gap-2 rounded-full border border-white/15 bg-black/60 px-3 py-2 text-xs font-medium text-foreground backdrop-blur transition-colors hover:border-poster-pink";
   const action =
-    "rounded-md border border-border bg-muted px-3 py-2 text-xs font-medium transition-colors hover:border-primary disabled:opacity-40";
+    "rounded-full border border-white/15 bg-white/5 px-4 py-2 text-xs font-medium transition-colors hover:border-poster-pink disabled:opacity-40";
 
   return (
     <div className="relative flex h-screen w-screen flex-col overflow-hidden lg:block">
@@ -476,6 +477,7 @@ export default function PlayerApp() {
             onHold={onHold}
             onToggleHold={toggleHold}
           />
+          <PosterChrome />
 
           {onDeck && (
             <button
@@ -512,19 +514,25 @@ export default function PlayerApp() {
 
         {!onDeck && (
           <div className="pointer-events-none flex justify-center px-3 pb-3 lg:absolute lg:inset-x-0 lg:bottom-6 lg:pb-0">
-            <div className="pointer-events-auto w-full max-w-[340px] rounded-lg border border-border bg-card/90 p-3 text-center backdrop-blur">
+            <div className="pointer-events-auto relative w-full max-w-[360px] overflow-hidden rounded-2xl border border-white/15 bg-black/70 shadow-[6px_6px_0_rgba(245,155,180,.28)] p-4 text-center backdrop-blur">
+              <span
+                aria-hidden
+                className="absolute inset-x-0 top-0 h-1 bg-gradient-to-r from-poster-coral via-poster-pink to-poster-blue"
+              />
               {focused ? (
                 <>
-                  <p className="font-mono text-[10px] uppercase tracking-widest text-muted-foreground">
-                    {safeFocus + 1} / {library.length}
+                  <p className="font-mono text-[10px] uppercase tracking-[0.25em] text-poster-pink">
+                    <span lang="ja">選曲</span> · No.{" "}
+                    {String(safeFocus + 1).padStart(2, "0")} /{" "}
+                    {String(library.length).padStart(2, "0")}
                   </p>
                   <p
-                    className="mt-1 truncate text-sm font-medium"
+                    className="mt-2 truncate font-serif text-xl italic leading-tight"
                     title={focused.title}
                   >
                     {focused.title}
                   </p>
-                  <p className="truncate text-xs text-muted-foreground">
+                  <p className="mt-0.5 truncate font-mono text-[11px] uppercase tracking-wider text-poster-silver/70">
                     {focused.author}
                   </p>
                   <div className="mt-3 flex justify-center gap-2">
@@ -532,7 +540,7 @@ export default function PlayerApp() {
                       <>
                         <button
                           onClick={() => playTrack(focused)}
-                          className="rounded-md bg-primary px-3 py-2 text-xs font-medium text-primary-foreground"
+                          className="rounded-md rounded-full bg-poster-coral px-4 py-2 text-xs font-medium text-white"
                         >
                           Play on turntable
                         </button>
@@ -554,7 +562,7 @@ export default function PlayerApp() {
                       <>
                         <button
                           onClick={() => playTrack(focused)}
-                          className="rounded-md bg-primary px-3 py-2 text-xs font-medium text-primary-foreground"
+                          className="rounded-md rounded-full bg-poster-coral px-4 py-2 text-xs font-medium text-white"
                         >
                           Play
                         </button>
@@ -567,7 +575,7 @@ export default function PlayerApp() {
                       </>
                     )}
                   </div>
-                  <p className="mt-2 text-[10px] text-muted-foreground">
+                  <p className="mt-3 font-mono text-[9px] uppercase tracking-[0.18em] text-poster-silver/50">
                     {inspecting
                       ? "Drag to turn the record sleeve over."
                       : "Scroll, drag or use ← → to flip through."}
@@ -591,8 +599,8 @@ export default function PlayerApp() {
           >
             ← aftarfadilah.com
           </Link>
-          <h1 className="mt-1 text-lg font-semibold tracking-tight">
-            Vinyl Player
+          <h1 className="mt-1 text-2xl font-bold tracking-tight">
+            Vinyl Turntable
           </h1>
           <p className="max-w-xs text-xs text-muted-foreground">
             Paste a YouTube or YouTube Music link or playlist to stock your
@@ -610,12 +618,12 @@ export default function PlayerApp() {
             placeholder="https://music.youtube.com/watch?v=… or playlist?list=…"
             aria-label="YouTube link"
             spellCheck={false}
-            className="min-w-0 flex-1 rounded-md border border-border bg-card/90 px-3 py-2 font-mono text-xs text-foreground outline-none backdrop-blur placeholder:text-muted-foreground/60 focus:border-primary"
+            className="min-w-0 flex-1 rounded-full border border-white/15 bg-black/60 px-4 py-2 font-mono text-xs text-foreground outline-none backdrop-blur placeholder:text-muted-foreground/60 focus:border-poster-pink"
           />
           <button
             type="submit"
             disabled={loading || !input.trim()}
-            className="rounded-md bg-primary px-3 py-2 text-xs font-medium text-primary-foreground transition-opacity disabled:opacity-40"
+            className="rounded-md rounded-full bg-poster-coral px-4 py-2 text-xs font-medium text-white transition-opacity disabled:opacity-40"
           >
             {loading ? "Pressing…" : "Add to rack"}
           </button>
@@ -632,24 +640,33 @@ export default function PlayerApp() {
       )}
 
       <div className="pointer-events-none relative order-3 flex flex-col gap-3 p-3 sm:flex-row sm:items-end sm:justify-between sm:p-6 lg:absolute lg:inset-x-0 lg:bottom-0 lg:order-none">
-        <div className="pointer-events-auto w-full rounded-lg border border-border bg-card/90 p-4 backdrop-blur sm:w-80">
+        <div className="pointer-events-auto relative w-full overflow-hidden rounded-2xl border border-white/15 bg-black/70 shadow-[6px_6px_0_rgba(245,155,180,.28)] p-4 backdrop-blur sm:w-80">
+          <span
+            aria-hidden
+            className="absolute inset-x-0 top-0 h-1 bg-gradient-to-r from-poster-coral via-poster-pink to-poster-blue"
+          />
           {loaded ? (
             <>
-              <p className="font-mono text-[10px] uppercase tracking-widest text-muted-foreground">
-                {want ? "Now playing" : "On the platter"}
+              <p className="flex items-center gap-2 font-mono text-[10px] uppercase tracking-[0.25em] text-poster-pink">
+                <span
+                  aria-hidden
+                  className={`h-1.5 w-1.5 rounded-full bg-poster-coral ${want ? "animate-pulse" : "opacity-40"}`}
+                />
+                <span lang="ja">{want ? "再生中" : "待機中"}</span>
+                <span>· {want ? "Now playing" : "On the platter"}</span>
               </p>
               <p
-                className="mt-1 truncate text-sm font-medium"
+                className="mt-2 truncate font-serif text-xl italic leading-tight"
                 title={loaded.title}
               >
                 {loaded.title}
               </p>
-              <p className="truncate text-xs text-muted-foreground">
+              <p className="mt-0.5 truncate font-mono text-[11px] uppercase tracking-wider text-poster-silver/70">
                 {loaded.author}
               </p>
-              <div className="mt-3 h-1 overflow-hidden rounded bg-muted">
+              <div className="mt-4 h-1.5 overflow-hidden rounded-full bg-white/10">
                 <div
-                  className="h-full bg-primary transition-[width] duration-200"
+                  className="h-full rounded-full bg-gradient-to-r from-poster-coral to-poster-pink transition-[width] duration-200"
                   style={{ width: `${Math.min(100, progress * 100)}%` }}
                 />
               </div>
@@ -658,7 +675,9 @@ export default function PlayerApp() {
                 <span>{formatTime(clock.duration)}</span>
               </div>
               <label className="mt-3 flex items-center gap-3 font-mono text-[10px] text-muted-foreground">
-                <span className="w-12 uppercase tracking-widest">Volume</span>
+                <span className="w-12 uppercase tracking-[0.2em] text-poster-silver/80">
+                  Volume
+                </span>
                 <input
                   type="range"
                   min={0}
@@ -667,7 +686,7 @@ export default function PlayerApp() {
                   value={volume}
                   onChange={(e) => changeVolume(Number(e.target.value))}
                   aria-label="Volume"
-                  className="h-1 flex-1 cursor-pointer accent-primary"
+                  className="h-1 flex-1 cursor-pointer accent-[#f59bb4]"
                 />
                 <span className="w-8 text-right tabular-nums">{volume}</span>
               </label>
@@ -690,14 +709,20 @@ export default function PlayerApp() {
               </div>
             </>
           ) : (
-            <p className="text-xs text-muted-foreground">
-              Nothing on the platter. Open the rack on the left and pick a
-              record.
-            </p>
+            <>
+              <p className="font-mono text-[10px] uppercase tracking-[0.25em] text-poster-pink">
+                <span lang="ja">待機中</span> · Nothing on the platter
+              </p>
+              <p className="mt-2 font-serif text-lg italic leading-tight">
+                Pick a record to begin.
+              </p>
+            </>
           )}
-          <div className="mt-3 space-y-2 border-t border-border pt-3">
+          <div className="mt-3 space-y-2 border-t border-dashed border-white/15 pt-3">
             <label className="flex items-center gap-3 font-mono text-[10px] text-muted-foreground">
-              <span className="w-12 uppercase tracking-widest">Wear</span>
+              <span className="w-12 uppercase tracking-[0.2em] text-poster-silver/80">
+                Wear
+              </span>
               <input
                 type="range"
                 min={0}
@@ -706,7 +731,7 @@ export default function PlayerApp() {
                 value={wear}
                 onChange={(e) => changeWear(Number(e.target.value))}
                 aria-label="Record wear: more wear, more surface noise"
-                className="h-1 flex-1 cursor-pointer accent-primary"
+                className="h-1 flex-1 cursor-pointer accent-[#f59bb4]"
               />
               <span className="w-8 text-right tabular-nums">{wear}</span>
             </label>
@@ -715,7 +740,7 @@ export default function PlayerApp() {
                 type="checkbox"
                 checked={sfxOn}
                 onChange={(e) => toggleSfx(e.target.checked)}
-                className="accent-primary"
+                className="accent-[#f59bb4]"
               />
               Turntable sounds (sleeve, needle, crackle)
             </label>

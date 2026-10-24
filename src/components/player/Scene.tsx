@@ -5,10 +5,12 @@ import { Canvas, useFrame, useThree } from "@react-three/fiber";
 import * as THREE from "three";
 import { RoomEnvironment } from "three/addons/environments/RoomEnvironment.js";
 import { Turntable } from "./Turntable";
-import { Rack, RACK_X } from "./Rack";
+import { Rack, RACK_X, SLEEVE_Y } from "./Rack";
 import { Vinyl } from "./Vinyl";
+import { callouts, makeMatTexture } from "./mat";
 import type { Track } from "./library";
 import {
+  ARM,
   TABLE_Y,
   createAnchor,
   createSim,
@@ -71,9 +73,9 @@ function CameraRig({ view }: { view: View }) {
     const aspect = size.width / size.height;
     const half = Math.tan(THREE.MathUtils.degToRad(cam.fov) / 2);
     if (view === "rack") {
-      const dist = Math.max(2.9 / half, 3.2 / (half * aspect));
-      const focus = new THREE.Vector3(RACK_X, 1.5, 0);
-      const dir = new THREE.Vector3(0, 0.2, 1).normalize();
+      const dist = Math.max(5.4 / half, 9.4 / (half * aspect));
+      const focus = new THREE.Vector3(RACK_X, SLEEVE_Y - 0.3, 0);
+      const dir = new THREE.Vector3(0, 0.05, 1).normalize();
       return { focus, position: focus.clone().addScaledVector(dir, dist) };
     }
     // The plinth (4.7 x 3.7) centred in frame with room for the overlay UI.
@@ -97,6 +99,41 @@ function CameraRig({ view }: { view: View }) {
     camera.lookAt(look.current);
   });
   return null;
+}
+
+const CALLOUT_POINTS = [
+  new THREE.Vector3(-1.9, 0.25, 0.9),
+  new THREE.Vector3(ARM.px, 0.4, ARM.pz),
+  new THREE.Vector3(1.85, 0.05, 1.45),
+];
+
+/** Projects a few turntable parts to screen space for the HTML callouts. */
+function CalloutProjector({ view }: { view: View }) {
+  const { camera, size } = useThree();
+  const v = useMemo(() => new THREE.Vector3(), []);
+  useFrame(() => {
+    CALLOUT_POINTS.forEach((p, i) => {
+      v.copy(p).project(camera);
+      callouts[i].x = ((v.x + 1) / 2) * size.width;
+      callouts[i].y = ((1 - v.y) / 2) * size.height;
+      callouts[i].on = view === "deck" && v.z < 1;
+    });
+  });
+  return null;
+}
+
+function DeskMat() {
+  const tex = useMemo(() => makeMatTexture(), []);
+  useEffect(() => () => tex.dispose(), [tex]);
+  return (
+    <mesh
+      rotation={[-Math.PI / 2, 0, 0]}
+      position={[0, TABLE_Y - 0.0005, -0.4]}
+    >
+      <planeGeometry args={[21, 14]} />
+      <meshStandardMaterial map={tex} roughness={0.9} />
+    </mesh>
+  );
 }
 
 function World(props: SceneProps) {
@@ -131,7 +168,7 @@ function World(props: SceneProps) {
 
   return (
     <>
-      <color attach="background" args={["#0d0f16"]} />
+      <color attach="background" args={["#0b0d11"]} />
       <CameraRig view={view} />
       <RoomEnv />
       <ambientLight intensity={0.35} />
@@ -146,16 +183,21 @@ function World(props: SceneProps) {
         shadow-camera-bottom={-6}
         shadow-bias={-0.0004}
       />
-      <pointLight position={[-4, 3, 4]} intensity={8} color="#8aa4ff" />
+      <pointLight position={[-4, 3, 4]} intensity={8} color="#ff9bb8" />
 
       <mesh
+        visible={view === "deck"}
         rotation={[-Math.PI / 2, 0, 0]}
         position={[0, TABLE_Y - 0.001, 0]}
         receiveShadow
       >
         <planeGeometry args={[80, 60]} />
-        <meshStandardMaterial color="#161823" roughness={0.85} />
+        <meshStandardMaterial color="#0b0d11" roughness={1} />
       </mesh>
+
+      {view === "deck" && <DeskMat />}
+      <CalloutProjector view={view} />
+      <pointLight position={[5, 3, -3]} intensity={10} color="#5aa0ff" />
 
       <Turntable
         simRef={sim}
