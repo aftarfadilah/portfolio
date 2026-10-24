@@ -11,8 +11,8 @@ export const RACK_X = -20;
 const SLEEVE = 3.1;
 // The focused sleeve floats at this height; the others climb away from it.
 export const SLEEVE_Y = TABLE_Y + 2.7;
-const NEIGHBOUR_GAP = 3.0;
-const PACK_GAP = 1.9;
+const NEIGHBOUR_GAP = 3.9;
+const PACK_GAP = 2.0;
 const WINDOW = 6;
 const LOAD_RADIUS = 5;
 const INSPECT_DISTANCE = 6.2;
@@ -175,7 +175,7 @@ function Sleeve({
     // Sleeves near the ends of the loaded window shrink away so they never pop.
     const edge = THREE.MathUtils.clamp((WINDOW + 0.5 - absd) / 2, 0, 1);
     // The selected record is a little larger than the rest.
-    const grow = 1 + 0.28 * Math.max(0, 1 - absd);
+    const grow = 1 + 0.75 * Math.max(0, 1 - absd);
     const targetScale = inspecting ? 0.001 : edge * grow;
     const lift = focused && !inspecting ? 0.12 : 0;
     scratch.euler.set(0, ry, 0);
