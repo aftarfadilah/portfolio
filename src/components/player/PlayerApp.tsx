@@ -593,14 +593,8 @@ export default function PlayerApp() {
           >
             ← aftarfadilah.com
           </Link>
-          <h1 className="mt-1 flex items-baseline gap-2 text-2xl font-bold italic tracking-tight">
-            aftar<span className="text-poster-pink">×</span>vinyl
-            <span
-              lang="ja"
-              className="font-serif text-[11px] font-normal not-italic tracking-[0.3em] text-poster-silver/70"
-            >
-              レコード
-            </span>
+          <h1 className="mt-1 text-2xl font-bold tracking-tight">
+            Vinyl Turntable
           </h1>
           <p className="max-w-xs text-xs text-muted-foreground">
             Paste a YouTube or YouTube Music link or playlist to stock your
