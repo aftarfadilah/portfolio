@@ -31,6 +31,12 @@
   --color-ember: #e2410d;
   --color-rule: #cfc5b3;
   --color-dim: #6f665c;
+  /* vinyl player poster */
+  --color-poster-ink: #0b0d11;
+  --color-poster-pink: #f59bb4;
+  --color-poster-coral: #e8506a;
+  --color-poster-blue: #3f7fb5;
+  --color-poster-silver: #c9ccd2;
 }
 
 html {

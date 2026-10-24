@@ -1,5 +1,6 @@
 "use client";
 
+import PosterChrome from "./PosterChrome";
 import Link from "next/link";
 import { useCallback, useEffect, useRef, useState } from "react";
 import { parseYouTubeLink } from "@/lib/youtube";
@@ -448,9 +449,9 @@ export default function PlayerApp() {
   const onDeck = view === "deck";
 
   const pill =
-    "pointer-events-auto flex items-center gap-2 rounded-full border border-border bg-card/90 px-3 py-2 text-xs font-medium text-foreground backdrop-blur transition-colors hover:border-primary";
+    "pointer-events-auto flex items-center gap-2 rounded-full border border-white/15 bg-black/60 px-3 py-2 text-xs font-medium text-foreground backdrop-blur transition-colors hover:border-poster-pink";
   const action =
-    "rounded-md border border-border bg-muted px-3 py-2 text-xs font-medium transition-colors hover:border-primary disabled:opacity-40";
+    "rounded-full border border-white/15 bg-white/5 px-4 py-2 text-xs font-medium transition-colors hover:border-poster-pink disabled:opacity-40";
 
   return (
     <div className="relative flex h-screen w-screen flex-col overflow-hidden lg:block">
@@ -476,6 +477,7 @@ export default function PlayerApp() {
             onHold={onHold}
             onToggleHold={toggleHold}
           />
+          <PosterChrome />
 
           {onDeck && (
             <button
@@ -512,7 +514,7 @@ export default function PlayerApp() {
 
         {!onDeck && (
           <div className="pointer-events-none flex justify-center px-3 pb-3 lg:absolute lg:inset-x-0 lg:bottom-6 lg:pb-0">
-            <div className="pointer-events-auto w-full max-w-[340px] rounded-lg border border-border bg-card/90 p-3 text-center backdrop-blur">
+            <div className="pointer-events-auto w-full max-w-[340px] rounded-2xl border border-white/10 bg-black/60 p-3 text-center backdrop-blur">
               {focused ? (
                 <>
                   <p className="font-mono text-[10px] uppercase tracking-widest text-muted-foreground">
@@ -532,7 +534,7 @@ export default function PlayerApp() {
                       <>
                         <button
                           onClick={() => playTrack(focused)}
-                          className="rounded-md bg-primary px-3 py-2 text-xs font-medium text-primary-foreground"
+                          className="rounded-md rounded-full bg-poster-coral px-4 py-2 text-xs font-medium text-white"
                         >
                           Play on turntable
                         </button>
@@ -554,7 +556,7 @@ export default function PlayerApp() {
                       <>
                         <button
                           onClick={() => playTrack(focused)}
-                          className="rounded-md bg-primary px-3 py-2 text-xs font-medium text-primary-foreground"
+                          className="rounded-md rounded-full bg-poster-coral px-4 py-2 text-xs font-medium text-white"
                         >
                           Play
                         </button>
@@ -591,8 +593,14 @@ export default function PlayerApp() {
           >
             ← aftarfadilah.com
           </Link>
-          <h1 className="mt-1 text-lg font-semibold tracking-tight">
-            Vinyl Player
+          <h1 className="mt-1 flex items-baseline gap-2 text-2xl font-bold italic tracking-tight">
+            aftar<span className="text-poster-pink">×</span>vinyl
+            <span
+              lang="ja"
+              className="font-serif text-[11px] font-normal not-italic tracking-[0.3em] text-poster-silver/70"
+            >
+              レコード
+            </span>
           </h1>
           <p className="max-w-xs text-xs text-muted-foreground">
             Paste a YouTube or YouTube Music link or playlist to stock your
@@ -610,12 +618,12 @@ export default function PlayerApp() {
             placeholder="https://music.youtube.com/watch?v=… or playlist?list=…"
             aria-label="YouTube link"
             spellCheck={false}
-            className="min-w-0 flex-1 rounded-md border border-border bg-card/90 px-3 py-2 font-mono text-xs text-foreground outline-none backdrop-blur placeholder:text-muted-foreground/60 focus:border-primary"
+            className="min-w-0 flex-1 rounded-full border border-white/15 bg-black/60 px-4 py-2 font-mono text-xs text-foreground outline-none backdrop-blur placeholder:text-muted-foreground/60 focus:border-poster-pink"
           />
           <button
             type="submit"
             disabled={loading || !input.trim()}
-            className="rounded-md bg-primary px-3 py-2 text-xs font-medium text-primary-foreground transition-opacity disabled:opacity-40"
+            className="rounded-md rounded-full bg-poster-coral px-4 py-2 text-xs font-medium text-white transition-opacity disabled:opacity-40"
           >
             {loading ? "Pressing…" : "Add to rack"}
           </button>
@@ -632,7 +640,7 @@ export default function PlayerApp() {
       )}
 
       <div className="pointer-events-none relative order-3 flex flex-col gap-3 p-3 sm:flex-row sm:items-end sm:justify-between sm:p-6 lg:absolute lg:inset-x-0 lg:bottom-0 lg:order-none">
-        <div className="pointer-events-auto w-full rounded-lg border border-border bg-card/90 p-4 backdrop-blur sm:w-80">
+        <div className="pointer-events-auto w-full rounded-2xl border border-white/10 bg-black/60 p-4 backdrop-blur sm:w-80">
           {loaded ? (
             <>
               <p className="font-mono text-[10px] uppercase tracking-widest text-muted-foreground">
@@ -649,7 +657,7 @@ export default function PlayerApp() {
               </p>
               <div className="mt-3 h-1 overflow-hidden rounded bg-muted">
                 <div
-                  className="h-full bg-primary transition-[width] duration-200"
+                  className="h-full bg-poster-pink transition-[width] duration-200"
                   style={{ width: `${Math.min(100, progress * 100)}%` }}
                 />
               </div>
@@ -667,7 +675,7 @@ export default function PlayerApp() {
                   value={volume}
                   onChange={(e) => changeVolume(Number(e.target.value))}
                   aria-label="Volume"
-                  className="h-1 flex-1 cursor-pointer accent-primary"
+                  className="h-1 flex-1 cursor-pointer accent-[#f59bb4]"
                 />
                 <span className="w-8 text-right tabular-nums">{volume}</span>
               </label>
@@ -706,7 +714,7 @@ export default function PlayerApp() {
                 value={wear}
                 onChange={(e) => changeWear(Number(e.target.value))}
                 aria-label="Record wear: more wear, more surface noise"
-                className="h-1 flex-1 cursor-pointer accent-primary"
+                className="h-1 flex-1 cursor-pointer accent-[#f59bb4]"
               />
               <span className="w-8 text-right tabular-nums">{wear}</span>
             </label>
@@ -715,7 +723,7 @@ export default function PlayerApp() {
                 type="checkbox"
                 checked={sfxOn}
                 onChange={(e) => toggleSfx(e.target.checked)}
-                className="accent-primary"
+                className="accent-[#f59bb4]"
               />
               Turntable sounds (sleeve, needle, crackle)
             </label>

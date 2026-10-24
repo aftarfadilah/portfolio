@@ -131,7 +131,7 @@ function World(props: SceneProps) {
 
   return (
     <>
-      <color attach="background" args={["#0d0f16"]} />
+      <color attach="background" args={["#0b0d11"]} />
       <CameraRig view={view} />
       <RoomEnv />
       <ambientLight intensity={0.35} />
@@ -146,7 +146,7 @@ function World(props: SceneProps) {
         shadow-camera-bottom={-6}
         shadow-bias={-0.0004}
       />
-      <pointLight position={[-4, 3, 4]} intensity={8} color="#8aa4ff" />
+      <pointLight position={[-4, 3, 4]} intensity={8} color="#ff9bb8" />
 
       <mesh
         rotation={[-Math.PI / 2, 0, 0]}
@@ -154,7 +154,7 @@ function World(props: SceneProps) {
         receiveShadow
       >
         <planeGeometry args={[80, 60]} />
-        <meshStandardMaterial color="#161823" roughness={0.85} />
+        <meshStandardMaterial color="#12141a" roughness={0.85} />
       </mesh>
 
       <Turntable
