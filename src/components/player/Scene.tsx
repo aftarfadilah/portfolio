@@ -73,8 +73,8 @@ function CameraRig({ view }: { view: View }) {
     const aspect = size.width / size.height;
     const half = Math.tan(THREE.MathUtils.degToRad(cam.fov) / 2);
     if (view === "rack") {
-      const dist = Math.max(5.4 / half, 8.4 / (half * aspect));
-      const focus = new THREE.Vector3(RACK_X + 2.4, SLEEVE_Y + 1.5, -2);
+      const dist = Math.max(6.6 / half, 11.5 / (half * aspect));
+      const focus = new THREE.Vector3(RACK_X, SLEEVE_Y - 0.3, 0);
       const dir = new THREE.Vector3(0, 0.05, 1).normalize();
       return { focus, position: focus.clone().addScaledVector(dir, dist) };
     }

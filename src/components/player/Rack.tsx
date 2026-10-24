@@ -11,10 +11,10 @@ export const RACK_X = -20;
 const SLEEVE = 3.1;
 // The focused sleeve floats at this height; the others climb away from it.
 export const SLEEVE_Y = TABLE_Y + 2.7;
-const NEIGHBOUR_GAP = 1.9;
-const PACK_GAP = 1.05;
-const WINDOW = 9;
-const LOAD_RADIUS = 6;
+const NEIGHBOUR_GAP = 3.0;
+const PACK_GAP = 1.9;
+const WINDOW = 6;
+const LOAD_RADIUS = 5;
 const INSPECT_DISTANCE = 6.2;
 const INSPECT_SCALE = 0.78;
 
@@ -36,9 +36,9 @@ function layout(d: number) {
     absd < 1 ? absd * NEIGHBOUR_GAP : NEIGHBOUR_GAP + (absd - 1) * PACK_GAP;
   return {
     x: RACK_X + sign * run,
-    y: d * (d > 0 ? 0.7 : 0.4),
-    z: -absd * 1.1,
-    ry: -sign * lean * 0.62,
+    y: d * (d > 0 ? 0.85 : 0.5),
+    z: -absd * 1.5,
+    ry: -sign * lean * 0.5,
     absd,
   };
 }
@@ -174,7 +174,9 @@ function Sleeve({
 
     // Sleeves near the ends of the loaded window shrink away so they never pop.
     const edge = THREE.MathUtils.clamp((WINDOW + 0.5 - absd) / 2, 0, 1);
-    const targetScale = inspecting ? 0.001 : edge;
+    // The selected record is a little larger than the rest.
+    const grow = 1 + 0.28 * Math.max(0, 1 - absd);
+    const targetScale = inspecting ? 0.001 : edge * grow;
     const lift = focused && !inspecting ? 0.12 : 0;
     scratch.euler.set(0, ry, 0);
     scratch.quat.setFromEuler(scratch.euler);
