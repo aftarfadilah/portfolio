@@ -1,3 +1,8 @@
+"use client";
+
+import { useEffect, useRef } from "react";
+import { callouts } from "./mat";
+
 const GRAIN =
   "url(\"data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='160' height='160'><filter id='n'><feTurbulence type='fractalNoise' baseFrequency='.9' numOctaves='2' stitchTiles='stitch'/></filter><rect width='100%' height='100%' filter='url(%23n)'/></svg>\")";
 
@@ -9,7 +14,32 @@ const FEATURES = [
 ];
 
 /** Retro Japanese record-ad dressing laid over the 3D scene. Purely visual. */
+const CALLOUT_LABELS = [
+  { en: "Platter", jp: "プラッター", dx: -150, dy: -90 },
+  { en: "Tonearm", jp: "トーンアーム", dx: 120, dy: 25 },
+  { en: "Start / Stop", jp: "スタート", dx: -120, dy: 80 },
+];
+
 export default function PosterChrome() {
+  const lines = useRef<(SVGGElement | null)[]>([]);
+  useEffect(() => {
+    let raf = 0;
+    const tick = () => {
+      callouts.forEach((c, i) => {
+        const el = lines.current[i];
+        if (!el) return;
+        const l = CALLOUT_LABELS[i];
+        el.style.opacity = c.on ? "1" : "0";
+        el.setAttribute("transform", `translate(${c.x} ${c.y})`);
+        el.firstElementChild?.setAttribute("x2", String(l.dx));
+        el.firstElementChild?.setAttribute("y2", String(l.dy));
+      });
+      raf = requestAnimationFrame(tick);
+    };
+    raf = requestAnimationFrame(tick);
+    return () => cancelAnimationFrame(raf);
+  }, []);
+
   return (
     <div
       aria-hidden
@@ -85,6 +115,50 @@ export default function PosterChrome() {
           ))}
         </ul>
       </div>
+
+      {/* callouts pointing at the turntable's parts (wide screens) */}
+      <svg className="absolute inset-0 hidden h-full w-full lg:block">
+        {CALLOUT_LABELS.map((l, i) => (
+          <g
+            key={l.en}
+            ref={(el) => {
+              lines.current[i] = el;
+            }}
+            style={{ opacity: 0, transition: "opacity .4s" }}
+          >
+            <line
+              x1={0}
+              y1={0}
+              stroke="rgba(245,155,180,.85)"
+              strokeWidth={1}
+            />
+            <circle r={3.5} fill="#f59bb4" />
+            <text
+              x={l.dx + (l.dx < 0 ? -8 : 8)}
+              y={l.dy}
+              textAnchor={l.dx < 0 ? "end" : "start"}
+              fill="#fff"
+              fontSize={12}
+              fontFamily="ui-monospace, monospace"
+              letterSpacing="0.18em"
+              style={{ textTransform: "uppercase" }}
+            >
+              {l.en}
+            </text>
+            <text
+              x={l.dx + (l.dx < 0 ? -8 : 8)}
+              y={l.dy + 16}
+              textAnchor={l.dx < 0 ? "end" : "start"}
+              fill="rgba(245,155,180,.9)"
+              fontSize={11}
+              letterSpacing="0.2em"
+              fontFamily="'Hiragino Mincho ProN','Yu Mincho',serif"
+            >
+              {l.jp}
+            </text>
+          </g>
+        ))}
+      </svg>
 
       {/* bottom info band */}
       <div className="absolute inset-x-0 bottom-0 hidden h-44 bg-gradient-to-t from-black via-black/70 to-transparent lg:block" />
