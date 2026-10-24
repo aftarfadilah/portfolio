@@ -190,25 +190,41 @@ export default function IDEShell({ children }: { children: ReactNode }) {
             </svg>
           </button>
 
-          <div className="flex items-center gap-2 ml-4 group">
+          <div className="flex items-center ml-2 group">
+            {/* 24px hit areas around the 12px dots (WCAG 2.2 target size). */}
             <button
               onClick={() => setWindowState("terminated")}
-              className="w-3 h-3 rounded-full transition-transform hover:scale-125"
-              style={{ background: "#ff5f57" }}
+              className="group/dot flex h-6 w-6 items-center justify-center"
               title="Close"
-            />
+              aria-label="Close"
+            >
+              <span
+                className="block w-3 h-3 rounded-full transition-transform group-hover/dot:scale-125"
+                style={{ background: "#ff5f57" }}
+              />
+            </button>
             <button
               onClick={() => setWindowState("minimized")}
-              className="w-3 h-3 rounded-full transition-transform hover:scale-125"
-              style={{ background: "#febc2e" }}
+              className="group/dot flex h-6 w-6 items-center justify-center"
               title="Minimize"
-            />
+              aria-label="Minimize"
+            >
+              <span
+                className="block w-3 h-3 rounded-full transition-transform group-hover/dot:scale-125"
+                style={{ background: "#febc2e" }}
+              />
+            </button>
             <button
               onClick={() => setWindowState(zen ? "normal" : "zen")}
-              className="w-3 h-3 rounded-full transition-transform hover:scale-125"
-              style={{ background: "#28c840" }}
+              className="group/dot flex h-6 w-6 items-center justify-center"
               title={zen ? "Exit Zen Mode" : "Zen Mode"}
-            />
+              aria-label={zen ? "Exit Zen Mode" : "Zen Mode"}
+            >
+              <span
+                className="block w-3 h-3 rounded-full transition-transform group-hover/dot:scale-125"
+                style={{ background: "#28c840" }}
+              />
+            </button>
           </div>
 
           <span className="flex-1 text-center text-xs text-muted-foreground font-mono">
