@@ -5,7 +5,7 @@ import { Canvas, useFrame, useThree } from "@react-three/fiber";
 import * as THREE from "three";
 import { RoomEnvironment } from "three/addons/environments/RoomEnvironment.js";
 import { Turntable } from "./Turntable";
-import { Rack, RACK_X } from "./Rack";
+import { Rack, RACK_X, SLEEVE_Y } from "./Rack";
 import { Vinyl } from "./Vinyl";
 import type { Track } from "./library";
 import {
@@ -71,9 +71,9 @@ function CameraRig({ view }: { view: View }) {
     const aspect = size.width / size.height;
     const half = Math.tan(THREE.MathUtils.degToRad(cam.fov) / 2);
     if (view === "rack") {
-      const dist = Math.max(2.9 / half, 3.2 / (half * aspect));
-      const focus = new THREE.Vector3(RACK_X, 1.5, 0);
-      const dir = new THREE.Vector3(0, 0.2, 1).normalize();
+      const dist = Math.max(5.4 / half, 8.4 / (half * aspect));
+      const focus = new THREE.Vector3(RACK_X + 2.4, SLEEVE_Y + 1.5, -2);
+      const dir = new THREE.Vector3(0, 0.05, 1).normalize();
       return { focus, position: focus.clone().addScaledVector(dir, dist) };
     }
     // The plinth (4.7 x 3.7) centred in frame with room for the overlay UI.
@@ -149,12 +149,13 @@ function World(props: SceneProps) {
       <pointLight position={[-4, 3, 4]} intensity={8} color="#ff9bb8" />
 
       <mesh
+        visible={view === "deck"}
         rotation={[-Math.PI / 2, 0, 0]}
         position={[0, TABLE_Y - 0.001, 0]}
         receiveShadow
       >
         <planeGeometry args={[80, 60]} />
-        <meshStandardMaterial color="#12141a" roughness={0.85} />
+        <meshStandardMaterial color="#0b0d11" roughness={1} />
       </mesh>
 
       <Turntable
