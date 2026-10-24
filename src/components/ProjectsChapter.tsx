@@ -24,7 +24,7 @@ export default function ProjectsChapter() {
       <div className="max-w-4xl mx-auto">
         <AnimateOnScroll>
           <p className="font-mono text-sm text-syntax-comment tracking-widest mb-4">
-            {"// 03"}
+            {"// 04"}
           </p>
         </AnimateOnScroll>
 

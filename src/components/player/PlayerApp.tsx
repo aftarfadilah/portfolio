@@ -482,7 +482,7 @@ export default function PlayerApp() {
           {onDeck && (
             <button
               onClick={() => setView("rack")}
-              aria-label="Open the record rack"
+              title="Open the record rack"
               className={`${pill} absolute left-3 top-1/2 -translate-y-1/2`}
             >
               <span aria-hidden className="text-base leading-none">
@@ -575,7 +575,7 @@ export default function PlayerApp() {
                       </>
                     )}
                   </div>
-                  <p className="mt-3 font-mono text-[9px] uppercase tracking-[0.18em] text-poster-silver/50">
+                  <p className="mt-3 font-mono text-[10px] uppercase tracking-[0.18em] text-poster-silver/70">
                     {inspecting
                       ? "Drag to turn the record sleeve over."
                       : "Scroll, drag or use ← → to flip through."}
@@ -760,7 +760,7 @@ export default function PlayerApp() {
         </div>
       </div>
 
-      <p className="pointer-events-none order-4 px-4 pb-3 text-center text-[10px] leading-snug text-muted-foreground/70 lg:absolute lg:inset-x-0 lg:bottom-1.5 lg:pb-0">
+      <p className="pointer-events-none order-4 px-4 pb-3 text-center text-[11px] leading-snug text-muted-foreground lg:absolute lg:inset-x-0 lg:bottom-1.5 lg:pb-0">
         I don&apos;t own, host or store any music or artwork here. Everything
         streams directly from YouTube through its official embedded player;
         titles and cover art are loaded from YouTube, and all rights belong to

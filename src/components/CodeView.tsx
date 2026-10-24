@@ -1,4 +1,5 @@
 "use client";
+/* eslint-disable react/jsx-key -- the `lines` arrays are static; CodeBlock keys each line when it renders them */
 
 import type { ReactNode } from "react";
 
@@ -151,6 +152,28 @@ function ExpertiseFile() {
   );
 }
 
+function LabsFile() {
+  return (
+    <FileSection
+      id="labs"
+      filename="labs.tsx"
+      startLine={1}
+      lines={[
+        <C>{"// labs.tsx"}</C>,
+        null,
+        <><K>const</K> <F>labs</F> <P>=</P> <P>[</P></>,
+        <><P>{"  "}</P><S>{'"Karhutla"'}</S><P>,</P> <C>{"// canvas 2D, 4,171 real satellite detections"}</C></>,
+        <><P>{"  "}</P><S>{'"Kanagawa"'}</S><P>,</P> <C>{"// WebGL, one draw call per frame"}</C></>,
+        <><P>{"  "}</P><S>{'"Turntable"'}</S><P>,</P> <C>{"// react-three-fiber, synthesised audio"}</C></>,
+        <><P>{"  "}</P><S>{'"ASCII water hero"'}</S><P>,</P> <C>{"// canvas 2D, pauses off screen"}</C></>,
+        <><P>]</P></>,
+        null,
+        <C>{"// Each one: problem, approach, decision, numbers."}</C>,
+      ]}
+    />
+  );
+}
+
 function ProjectsFile() {
   return (
     <FileSection
@@ -219,6 +242,7 @@ export default function CodeView() {
       <HeroFile />
       <ExperienceFile />
       <ExpertiseFile />
+      <LabsFile />
       <ProjectsFile />
       <ChatFile />
     </div>

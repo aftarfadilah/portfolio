@@ -332,8 +332,23 @@ export default function AsciiIntro({ links }: { links: Link[] }) {
     const hitAt = (px: number, py: number) =>
       hits.find((h) => px >= h.x0 && px <= h.x1 && py >= h.y0 && py <= h.y1);
 
+    // The field is CPU-drawn, so skip frames while it is off screen (or the tab
+    // is hidden) and cap touch devices at 30fps.
+    let visible = true;
+    let lastDraw = -Infinity;
+    const minInterval = window.matchMedia("(pointer: coarse)").matches ? 1000 / 30 : 0;
+    const io = new IntersectionObserver(([entry]) => {
+      visible = entry.isIntersecting;
+    });
+    io.observe(canvas);
+
     const frame = (now: number) => {
       if (disposed) return;
+      if (!reduced && (!visible || now - lastDraw < minInterval - 2)) {
+        raf = requestAnimationFrame(frame);
+        return;
+      }
+      lastDraw = now;
       const t = reduced ? ASCII_INTRO_DURATION + 1 : (now - start) / 1000;
       live = t >= P2_END;
       const w = canvas.clientWidth;
@@ -548,6 +563,7 @@ export default function AsciiIntro({ links }: { links: Link[] }) {
       disposed = true;
       cancelAnimationFrame(raf);
       ro.disconnect();
+      io.disconnect();
       window.removeEventListener("pointermove", onMove);
       document.removeEventListener("pointerleave", onLeave);
       host.removeEventListener("click", onClick);

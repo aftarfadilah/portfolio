@@ -1,6 +1,7 @@
 export const navLinks = [
   { label: "Experience", href: "#experience" },
   { label: "Expertise", href: "#expertise" },
+  { label: "Labs", href: "#labs" },
   { label: "Projects", href: "#projects" },
   { label: "Chat", href: "#chat" },
 ] as const;
@@ -74,11 +75,11 @@ export const experiences: Experience[] = [
     role: "Frontend Developer",
     period: "Nov 2022 — Aug 2024",
     location: "Germany · Remote",
-    description: "Part-time frontend developer building the UI for an AI-powered healthcare SaaS dashboard, focused on intuitive UX for medical professionals and facility management.",
+    description: "One of the first four people on the team. Part-time frontend developer building the ClinicOS dashboard that medical professionals and facility managers work in, with Next.js, React, TypeScript and Tailwind CSS. ClinicOS is Germany's first AI-integrated physician information system.",
     highlights: [
-      "Built frontend for ClinicOS healthcare SaaS dashboard",
-      "Focused on intuitive UX for medical staff",
       "One of the first 4 team members",
+      "Built the ClinicOS dashboard frontend with Next.js, React, TypeScript and Tailwind CSS",
+      "Designed for medical staff and facility management",
     ],
     tags: ["Next.js", "React", "TypeScript", "Tailwind CSS", "Healthcare AI"],
     awards: [
@@ -129,6 +130,98 @@ export const expertiseAreas: ExpertiseArea[] = [
   },
 ];
 
+export interface LabStat {
+  value: string;
+  label: string;
+}
+
+export interface Lab {
+  title: string;
+  tagline: string;
+  /** Route of the live piece. Omitted for work that is this page itself. */
+  href?: string;
+  tags: string[];
+  problem: string;
+  approach: string;
+  decision: string;
+  stats: LabStat[];
+}
+
+/**
+ * Figures were counted from the code and data files, or measured on a
+ * production build with Lighthouse 12 (simulated mobile / desktop presets) on
+ * 2026-10-24. Re-measure before changing them.
+ */
+export const labs: Lab[] = [
+  {
+    title: "Karhutla",
+    tagline: "A one-screen story built from real satellite detections",
+    href: "/karhutla",
+    tags: ["Canvas 2D", "Typed arrays", "NASA FIRMS", "EN · ID"],
+    problem:
+      "Show what a day of fire in Indonesia looks like on a single screen, with real data instead of an illustration.",
+    approach:
+      "Every glowing point is one VIIRS S-NPP detection. The points sit in flat typed arrays, glow sprites are rendered once and reused, and a scan line sweeps the map the way the satellite does. Hover or tap a point to read its brightness temperature, radiative power and confidence.",
+    decision:
+      "The data ships as a dated snapshot in static JSON, not a live FIRMS call. There is no API key, rate limit or loading failure to design around, at the cost of the page showing one day, labelled as such.",
+    stats: [
+      { value: "4,171", label: "real detections drawn" },
+      { value: "105 KB", label: "data snapshot" },
+      { value: "100 / 100", label: "Lighthouse performance / accessibility, desktop" },
+    ],
+  },
+  {
+    title: "Kanagawa",
+    tagline: "The Great Wave, redrawn in animated glyphs",
+    href: "/kanagawa",
+    tags: ["WebGL", "GLSL", "Canvas fallback", "EN · ID · JA"],
+    problem:
+      "Turn one woodblock print into a full-screen, interactive piece that moves, without video and without thousands of DOM nodes.",
+    approach:
+      "The print is sampled into a grid of cells, each a 4×8 patch of pixels. Flat patches get a density glyph, detailed ones the glyph whose strokes match best, and colours snap to the nearest entry of a Kanagawa palette (20 colours at 6 brightnesses each). A fragment shader then draws the grid from a glyph atlas while the water flows, the foam glitters and the pointer acts as a lantern.",
+    decision:
+      "One full-screen triangle and one shader, not a text element per cell, so a frame costs a single draw call. The same grid is drawn once as a still 2D frame when WebGL is missing or the GPU context is lost, so the page, camera and wiki still work.",
+    stats: [
+      { value: "1", label: "draw call per frame" },
+      { value: "120", label: "palette entries (20 colours × 6 brightnesses)" },
+      { value: "3", label: "languages in the wiki" },
+    ],
+  },
+  {
+    title: "Turntable",
+    tagline: "A 3D record player that plays YouTube links",
+    href: "/player",
+    tags: ["React Three Fiber", "Web Audio", "Next.js route handlers"],
+    problem:
+      "Make a music player feel like an object you operate, when the actual audio comes from a YouTube embed that can't be routed through Web Audio.",
+    approach:
+      "A react-three-fiber scene with a 33⅓ rpm platter, a tonearm whose angle is solved from the geometry so the stylus lands on the groove radius you want, and a rack of sleeves you flip through. Playlists import through small route handlers that proxy YouTube metadata and thumbnails.",
+    decision:
+      "Sound effects are synthesised, not sampled: the pops, surface hiss and motor hum come from Web Audio, so there is nothing to license or download. Three.js stays on this route; the home page loads no WebGL code.",
+    stats: [
+      { value: "0", label: "audio files shipped" },
+      { value: "460 KB", label: "JS, loaded only on /player" },
+      { value: "237 KB", label: "JS for the whole home page" },
+    ],
+  },
+  {
+    title: "ASCII water hero",
+    tagline: "The first screen of this page",
+    tags: ["Canvas 2D", "Water simulation", "Reduced motion"],
+    problem:
+      "Make the first screen memorable without hiding the name, role and links behind an animation.",
+    approach:
+      "A canvas draws a loading intro that decodes into the name and links, then a ripple simulation runs underneath so the text floats on moving water. The same copy is in the DOM for screen readers, and the canvas itself is hidden from them.",
+    decision:
+      "The field is drawn on the CPU, so it stops while it is off screen, is capped at 30 fps on touch devices, and renders one still frame when the visitor prefers reduced motion.",
+    stats: [
+      { value: "100", label: "Lighthouse performance, desktop" },
+      { value: "96–97", label: "Lighthouse performance, mobile (3 runs)" },
+      { value: "100", label: "Lighthouse accessibility" },
+    ],
+  },
+];
+
 export interface Project {
   title: string;
   description: string;
@@ -173,6 +266,7 @@ export const ideSections = [
   { id: "hero", file: "hero.tsx", label: "hero", icon: "tsx" as const },
   { id: "experience", file: "experience.tsx", label: "experience", icon: "tsx" as const },
   { id: "expertise", file: "expertise.tsx", label: "expertise", icon: "tsx" as const },
+  { id: "labs", file: "labs.tsx", label: "labs", icon: "tsx" as const },
   { id: "projects", file: "projects.tsx", label: "projects", icon: "tsx" as const },
   { id: "chat", file: "chat.tsx", label: "chat", icon: "tsx" as const },
 ] as const;

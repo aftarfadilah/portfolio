@@ -92,7 +92,7 @@ export default function ChatChapter() {
     >
       <div className="mx-auto max-w-2xl">
         <p className="mb-4 font-mono text-sm tracking-widest text-syntax-comment">
-          {"// 04"}
+          {"// 05"}
         </p>
         <h2 className="mb-4 text-5xl font-bold tracking-tight md:text-6xl">
           Talk to &quot;Aftar&quot;
