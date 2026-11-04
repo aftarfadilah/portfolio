@@ -3,16 +3,12 @@
 import Link from "next/link";
 import { motion } from "framer-motion";
 import { useCallback, useEffect, useRef, useState } from "react";
-import { closer, opener } from "@/data/casefile";
-import BottomBar from "./BottomBar";
-import CaseText from "./CaseText";
-import Exhibit from "./Exhibit";
-import Footer from "./Footer";
+import { opener, unreleased } from "@/data/changelog";
+import Doc from "./Doc";
 import Gate from "./Gate";
 import Hud from "./Hud";
-import Ledger from "./Ledger";
-import ScanBlock from "./ScanBlock";
-import styles from "./casefile.module.css";
+import IdeBar from "./IdeBar";
+import styles from "./changelog.module.css";
 import { useReducedMotion } from "./useReducedMotion";
 
 const beat = (i: number, reduced: boolean) => ({
@@ -21,21 +17,19 @@ const beat = (i: number, reduced: boolean) => ({
   transition: { duration: 0.9, delay: 0.25 + i * 0.55, ease: [0.22, 0.61, 0.36, 1] as const },
 });
 
-export default function CaseFile() {
+export default function Changelog() {
   const [ready, setReady] = useState(false);
   const root = useRef<HTMLDivElement>(null);
   const scroller = useRef<HTMLElement>(null);
   const reduced = useReducedMotion();
   const done = useCallback(() => setReady(true), []);
 
-  // Scroll progress (--p, 0 to 100) feeds the scrubber; data-past hands the screen from the hero's overlays to the bar.
+  // data-past hands the screen from the hero's overlays to the editor bar once the visitor scrolls past the hero.
   useEffect(() => {
     const main = scroller.current;
     const el = root.current;
     if (!main || !el) return;
     const on = () => {
-      const max = main.scrollHeight - main.clientHeight;
-      el.style.setProperty("--p", String(Math.round((main.scrollTop / Math.max(1, max)) * 100)));
       el.dataset.past = main.scrollTop > main.clientHeight * 0.55 ? "1" : "0";
     };
     on();
@@ -57,7 +51,7 @@ export default function CaseFile() {
       <Hud scrollRef={scroller} />
 
       <Link href="/" className={`${styles.heroOnly} fixed top-5 left-5 z-[55] font-mono text-[11px] underline-offset-4 hover:text-ember hover:underline sm:top-8 sm:left-8 sm:text-[13px]`}>
-        {closer.back}
+        {unreleased.back}
       </Link>
 
       <main ref={scroller} className="absolute inset-0 overflow-x-hidden overflow-y-auto scroll-smooth pb-7">
@@ -77,14 +71,10 @@ export default function CaseFile() {
           )}
         </section>
 
-        <ScanBlock />
-        <CaseText />
-        <Exhibit />
-        <Ledger />
-        <Footer />
+        <Doc />
       </main>
 
-      <BottomBar />
+      <IdeBar scrollRef={scroller} />
     </div>
   );
 }

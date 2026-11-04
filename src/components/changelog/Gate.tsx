@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { gate } from "@/data/casefile";
+import { gate } from "@/data/changelog";
 import { useReducedMotion } from "./useReducedMotion";
 
 const DURATION = 2600;
@@ -44,7 +44,7 @@ export default function Gate({ onDone }: { onDone: () => void }) {
 
       <ul className="max-w-xl space-y-1 text-xs leading-relaxed sm:text-sm" aria-hidden>
         {gate.lines.slice(0, shown).map((l) => (
-          <li key={l} className={l.startsWith("ready") ? "text-ember" : "opacity-70"}>
+          <li key={l} className={l.startsWith("ready") ? "text-ember" : l.startsWith("✓") ? "text-syntax-comment" : "opacity-70"}>
             {l}
           </li>
         ))}

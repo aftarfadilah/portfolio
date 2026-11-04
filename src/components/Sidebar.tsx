@@ -32,7 +32,7 @@ const apps = [
   { href: "/player", name: "turntable", title: "Open the turntable", dot: "bg-syntax-function" },
   { href: "/kanagawa", name: "kanagawa", title: "Open the Great Wave", dot: "bg-syntax-string" },
   { href: "/karhutla", name: "karhutla", title: "Open the karhutla story", dot: "bg-orange-400" },
-  { href: "/casefile", name: "casefile", title: "Open the case file", dot: "bg-red-500" },
+  { href: "/changelog", name: "changelog", title: "Open the changelog", dot: "bg-red-500" },
 ];
 
 export default function Sidebar({ activeSection, onNavigate, isOpen, onClose }: SidebarProps) {

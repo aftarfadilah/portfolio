@@ -1,8 +1,8 @@
 "use client";
 
 import { useEffect, useRef, useState, type RefObject } from "react";
-import { hud } from "@/data/casefile";
-import styles from "./casefile.module.css";
+import { hud } from "@/data/changelog";
+import styles from "./changelog.module.css";
 
 const pad = (n: number) => String(Math.max(0, Math.round(n))).padStart(3, "0");
 
