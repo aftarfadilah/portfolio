@@ -44,7 +44,7 @@ export default function Gate({ onDone }: { onDone: () => void }) {
 
       <ul className="max-w-xl space-y-1 text-xs leading-relaxed sm:text-sm" aria-hidden>
         {gate.lines.slice(0, shown).map((l) => (
-          <li key={l} className={l.includes("flaky") ? "text-ember" : l.startsWith("47 passed") ? "text-white" : "opacity-70"}>
+          <li key={l} className={l.startsWith("ready") ? "text-ember" : "opacity-70"}>
             {l}
           </li>
         ))}

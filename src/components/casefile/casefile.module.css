@@ -44,7 +44,7 @@
   z-index: 61;
   pointer-events: none;
   background:
-    repeating-linear-gradient(to bottom, rgba(0, 0, 0, 0.16) 0 1px, transparent 1px 3px),
+    repeating-linear-gradient(to bottom, rgba(0, 0, 0, 0.1) 0 1px, transparent 1px 3px),
     radial-gradient(ellipse at center, transparent 55%, rgba(0, 0, 0, 0.55) 100%);
 }
 
@@ -134,5 +134,109 @@
 @media (max-width: 640px) {
   .crt {
     background: radial-gradient(ellipse at center, transparent 60%, rgba(0, 0, 0, 0.5) 100%);
+  }
+}
+
+/* ---- instrument-panel chrome (from the reference's HUD language) ---- */
+
+/* 10px, uppercase, tight. The one text style for every readout below the hero. */
+.ui {
+  font-family: var(--font-geist-mono), ui-monospace, monospace;
+  font-size: 10px;
+  letter-spacing: -0.04em;
+  text-transform: uppercase;
+  line-height: 1.3;
+}
+
+/* White label with dark text: the X / Y read-outs. */
+.chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  height: 16px;
+  padding: 0 6px;
+  background: #fff;
+  color: #393939;
+  z-index: 3;
+}
+
+/* Diagonal hatch that drifts sideways. The step is 5px / sin(105deg) = 5.176px,
+   the horizontal distance that lands every stripe where its neighbour was, so the loop is seamless. */
+.hatchBox::before {
+  content: "";
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  left: -8px;
+  right: -8px;
+  z-index: 2;
+  pointer-events: none;
+  background: repeating-linear-gradient(105deg, rgba(255, 255, 255, 0.11) 0 0.5px, transparent 0.5px 5px);
+  animation: hatch 0.313s linear infinite;
+  will-change: transform;
+}
+
+@keyframes hatch {
+  to { transform: translateX(5.176px); }
+}
+
+/* Scroll scrubber: a hatched fill whose width follows --p (0 to 100), set on the root. */
+.scrub {
+  height: 100%;
+  width: calc(var(--p, 0) * 1%);
+  background: repeating-linear-gradient(105deg, #fff 0 1px, transparent 1px 3px);
+}
+
+/* Faint dotted ground under the figure. */
+.terrain {
+  position: absolute;
+  inset: auto 0 0 0;
+  height: 48%;
+  pointer-events: none;
+  opacity: 0.5;
+  background: radial-gradient(rgba(255, 255, 255, 0.4) 0.6px, transparent 0.9px) 0 0 / 4px 4px;
+  -webkit-mask-image:
+    radial-gradient(ellipse 24% 36% at 16% 72%, #000, transparent),
+    radial-gradient(ellipse 18% 28% at 44% 88%, #000, transparent),
+    radial-gradient(ellipse 26% 34% at 72% 64%, #000, transparent),
+    radial-gradient(ellipse 16% 30% at 94% 90%, #000, transparent);
+  mask-image:
+    radial-gradient(ellipse 24% 36% at 16% 72%, #000, transparent),
+    radial-gradient(ellipse 18% 28% at 44% 88%, #000, transparent),
+    radial-gradient(ellipse 26% 34% at 72% 64%, #000, transparent),
+    radial-gradient(ellipse 16% 30% at 94% 90%, #000, transparent);
+}
+
+.fadeX {
+  -webkit-mask-image: linear-gradient(to right, transparent, #000 10%, #000 90%, transparent);
+  mask-image: linear-gradient(to right, transparent, #000 10%, #000 90%, transparent);
+}
+
+.fadeY {
+  -webkit-mask-image: linear-gradient(to bottom, #000 50%, transparent);
+  mask-image: linear-gradient(to bottom, #000 50%, transparent);
+}
+
+/* The hero owns its own overlays; once the visitor scrolls past it, the panel takes over. */
+.heroOnly {
+  transition: opacity 0.3s linear;
+}
+
+.root[data-past="1"] .heroOnly {
+  opacity: 0;
+  pointer-events: none;
+}
+
+.bottomBar {
+  transition: transform 0.35s cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+.root[data-past="0"] .bottomBar {
+  transform: translateY(100%);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .hatchBox::before {
+    animation: none;
   }
 }

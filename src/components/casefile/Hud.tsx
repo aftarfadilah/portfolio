@@ -45,7 +45,7 @@ export default function Hud({ scrollRef }: { scrollRef: RefObject<HTMLElement | 
   }, [scrollRef]);
 
   return (
-    <div aria-hidden className="pointer-events-none fixed inset-0 z-50 font-mono text-[11px] text-[#c8c8c8] sm:text-[13px]">
+    <div aria-hidden className={`${styles.heroOnly} pointer-events-none fixed inset-0 z-50 font-mono text-[11px] text-[#c8c8c8] sm:text-[13px]`}>
       <div className="absolute top-5 right-5 text-right sm:top-8 sm:right-8">
         <span ref={clock}>--:--:--</span>
         <div className="mt-1 opacity-50">

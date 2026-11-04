@@ -2,15 +2,16 @@
 
 import Link from "next/link";
 import { motion } from "framer-motion";
-import { useCallback, useRef, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { closer, opener } from "@/data/casefile";
-import Closer from "./Closer";
-import Evidence from "./Evidence";
+import BottomBar from "./BottomBar";
+import CaseText from "./CaseText";
+import Exhibit from "./Exhibit";
+import Footer from "./Footer";
 import Gate from "./Gate";
 import Hud from "./Hud";
-import Marquee from "./Marquee";
-import Narrative from "./Narrative";
-import XrayLens from "./XrayLens";
+import Ledger from "./Ledger";
+import ScanBlock from "./ScanBlock";
 import styles from "./casefile.module.css";
 import { useReducedMotion } from "./useReducedMotion";
 
@@ -22,12 +23,32 @@ const beat = (i: number, reduced: boolean) => ({
 
 export default function CaseFile() {
   const [ready, setReady] = useState(false);
+  const root = useRef<HTMLDivElement>(null);
   const scroller = useRef<HTMLElement>(null);
   const reduced = useReducedMotion();
   const done = useCallback(() => setReady(true), []);
 
+  // Scroll progress (--p, 0 to 100) feeds the scrubber; data-past hands the screen from the hero's overlays to the bar.
+  useEffect(() => {
+    const main = scroller.current;
+    const el = root.current;
+    if (!main || !el) return;
+    const on = () => {
+      const max = main.scrollHeight - main.clientHeight;
+      el.style.setProperty("--p", String(Math.round((main.scrollTop / Math.max(1, max)) * 100)));
+      el.dataset.past = main.scrollTop > main.clientHeight * 0.55 ? "1" : "0";
+    };
+    on();
+    main.addEventListener("scroll", on, { passive: true });
+    window.addEventListener("resize", on);
+    return () => {
+      main.removeEventListener("scroll", on);
+      window.removeEventListener("resize", on);
+    };
+  }, []);
+
   return (
-    <div className={`${styles.root} fixed inset-0 overflow-hidden bg-black text-[#c8c8c8]`}>
+    <div ref={root} data-past="0" className={`${styles.root} fixed inset-0 overflow-hidden bg-black text-[#c8c8c8]`}>
       {!ready && <Gate onDone={done} />}
 
       <div aria-hidden className={styles.grain} />
@@ -35,12 +56,12 @@ export default function CaseFile() {
       <div aria-hidden className={styles.crt} />
       <Hud scrollRef={scroller} />
 
-      <Link href="/" className="fixed top-5 left-5 z-[55] font-mono text-[11px] underline-offset-4 hover:text-ember hover:underline sm:top-8 sm:left-8 sm:text-[13px]">
+      <Link href="/" className={`${styles.heroOnly} fixed top-5 left-5 z-[55] font-mono text-[11px] underline-offset-4 hover:text-ember hover:underline sm:top-8 sm:left-8 sm:text-[13px]`}>
         {closer.back}
       </Link>
 
-      <main ref={scroller} className="absolute inset-0 overflow-y-auto overflow-x-hidden scroll-smooth">
-        <section className="flex min-h-svh flex-col justify-center px-6 sm:px-16">
+      <main ref={scroller} className="absolute inset-0 overflow-x-hidden overflow-y-auto scroll-smooth pb-7">
+        <section id="index" className="flex min-h-svh flex-col justify-center px-6 sm:px-16">
           {ready && (
             <h1 className="text-[clamp(2.4rem,9.5vw,10rem)] leading-[0.92] font-light tracking-[-0.05em] lowercase">
               <motion.span className="block" {...beat(0, reduced)}>
@@ -56,12 +77,14 @@ export default function CaseFile() {
           )}
         </section>
 
-        <Marquee />
-        <Narrative />
-        <XrayLens />
-        <Evidence />
-        <Closer />
+        <ScanBlock />
+        <CaseText />
+        <Exhibit />
+        <Ledger />
+        <Footer />
       </main>
+
+      <BottomBar />
     </div>
   );
 }
